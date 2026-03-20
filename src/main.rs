@@ -1,3 +1,5 @@
+use std::cell::OnceCell;
+
 use wayland_client::{
 	Connection, Dispatch, EventQueue, QueueHandle,
 	protocol::{wl_keyboard::KeyState, wl_registry},
@@ -6,7 +8,7 @@ use wayland_protocols_plasma::fake_input::client::{
 	__interfaces::ORG_KDE_KWIN_FAKE_INPUT_INTERFACE, org_kde_kwin_fake_input::OrgKdeKwinFakeInput,
 };
 
-struct AppState(Option<OrgKdeKwinFakeInput>);
+struct AppState(OnceCell<OrgKdeKwinFakeInput>);
 
 impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
 	fn event(
@@ -30,7 +32,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
 			if interface == ORG_KDE_KWIN_FAKE_INPUT_INTERFACE.name {
 				println!("Found the fake input interface!");
 				let proxy: OrgKdeKwinFakeInput = registry.bind(name, version, qh, ());
-				state.0 = Some(proxy);
+				state.0.set(proxy).unwrap();
 			}
 		}
 	}
@@ -59,10 +61,10 @@ fn main() {
 	let registry = display.get_registry(&queue_handle, ());
 
 	println!("Advertised globals:");
-	let mut appstate = AppState(None);
+	let mut appstate = AppState(OnceCell::new());
 	let _ = event_queue.roundtrip(&mut appstate);
 
-	let fake_input = appstate.0.as_ref().unwrap();
+	let fake_input = appstate.0.get().unwrap();
 	fake_input.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
 
 	const KEY_A: u32 = 30;
