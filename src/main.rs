@@ -1,16 +1,21 @@
-use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, protocol::wl_registry};
-use wayland_protocols_plasma::fake_input::client::__interfaces::ORG_KDE_KWIN_FAKE_INPUT_INTERFACE;
+use wayland_client::{
+	Connection, Dispatch, EventQueue, QueueHandle,
+	protocol::{wl_keyboard::KeyState, wl_registry},
+};
+use wayland_protocols_plasma::fake_input::client::{
+	__interfaces::ORG_KDE_KWIN_FAKE_INPUT_INTERFACE, org_kde_kwin_fake_input::OrgKdeKwinFakeInput,
+};
 
-struct AppState;
+struct AppState(Option<OrgKdeKwinFakeInput>);
 
 impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
 	fn event(
-		_state: &mut Self,
-		_: &wl_registry::WlRegistry,
+		state: &mut Self,
+		registry: &wl_registry::WlRegistry,
 		event: wl_registry::Event,
 		_: &(),
 		_: &Connection,
-		_: &QueueHandle<AppState>,
+		qh: &QueueHandle<AppState>,
 	) {
 		// When receiving events from the wl_registry, we are only interested in the
 		// `global` event, which signals a new available global.
@@ -24,8 +29,23 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
 			println!("[{}] {} (v{})", name, interface, version);
 			if interface == ORG_KDE_KWIN_FAKE_INPUT_INTERFACE.name {
 				println!("Found the fake input interface!");
+				let proxy: OrgKdeKwinFakeInput = registry.bind(name, version, qh, ());
+				state.0 = Some(proxy);
 			}
 		}
+	}
+}
+
+impl Dispatch<OrgKdeKwinFakeInput, ()> for AppState {
+	fn event(
+		_: &mut Self,
+		_: &OrgKdeKwinFakeInput,
+		_: <OrgKdeKwinFakeInput as wayland_client::Proxy>::Event,
+		_: &(),
+		_: &Connection,
+		_: &QueueHandle<Self>,
+	) {
+		unreachable!()
 	}
 }
 
@@ -39,5 +59,15 @@ fn main() {
 	let registry = display.get_registry(&queue_handle, ());
 
 	println!("Advertised globals:");
-	let _ = event_queue.roundtrip(&mut AppState);
+	let mut appstate = AppState(None);
+	let _ = event_queue.roundtrip(&mut appstate);
+
+	let fake_input = appstate.0.as_ref().unwrap();
+	fake_input.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
+
+	const KEY_A: u32 = 30;
+	fake_input.keyboard_key(KEY_A, KeyState::Pressed.into());
+	fake_input.keyboard_key(KEY_A, KeyState::Released.into());
+
+	event_queue.roundtrip(&mut appstate).unwrap();
 }
