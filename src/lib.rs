@@ -1,3 +1,4 @@
+use input_linux::Key;
 use thiserror::Error;
 use wayland_client::{
 	ConnectError, Connection, Dispatch, Proxy, QueueHandle,
@@ -9,7 +10,10 @@ use wayland_client::{
 };
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::xkb::Xkb;
+use crate::xkb::{
+	Xkb,
+	mapping::{MappedKey, Modifiers},
+};
 
 mod xkb;
 
@@ -56,7 +60,7 @@ impl Kwtypr {
 		self.components.fake_input.is_some()
 			&& self.components.seat.is_some()
 			&& self.components.keyboard.is_some()
-			&& self.components.xkb_state.is_some()
+			&& self.components.xkb.is_some()
 	}
 
 	pub fn send_text(&mut self, text: &str) {
@@ -66,12 +70,9 @@ impl Kwtypr {
 		};
 
 		for character in text.chars() {
-			if let Some(xkb_state) = &self.components.xkb_state {
+			if let Some(xkb_state) = &self.components.xkb {
 				match xkb_state.key_for_char(character) {
-					Ok(mapped_key) => {
-						fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Pressed.into());
-						fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Released.into());
-					}
+					Ok(mapped_key) => send_mapped_key(fake_input, &mapped_key),
 					Err(e) => eprintln!(
 						"Failed to map character {:?} to a key event: {}",
 						character, e
@@ -89,6 +90,33 @@ impl Kwtypr {
 			.event_queue
 			.roundtrip(&mut self.components)
 			.unwrap();
+	}
+}
+
+fn send_mapped_key(fake_input: &OrgKdeKwinFakeInput, mapped_key: &MappedKey) {
+	press_modifiers(fake_input, &mapped_key.modifiers);
+	fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Pressed.into());
+	fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Released.into());
+	release_modifiers(fake_input, &mapped_key.modifiers);
+}
+
+fn press_modifiers(fake_input: &OrgKdeKwinFakeInput, modifiers: &Modifiers) {
+	if modifiers.shift {
+		fake_input.keyboard_key(Key::LeftShift.code().into(), KeyState::Pressed.into());
+	}
+
+	if modifiers.altgr {
+		fake_input.keyboard_key(Key::RightAlt.code().into(), KeyState::Pressed.into());
+	}
+}
+
+fn release_modifiers(fake_input: &OrgKdeKwinFakeInput, modifiers: &Modifiers) {
+	if modifiers.shift {
+		fake_input.keyboard_key(Key::LeftShift.code().into(), KeyState::Released.into());
+	}
+
+	if modifiers.altgr {
+		fake_input.keyboard_key(Key::RightAlt.code().into(), KeyState::Released.into());
 	}
 }
 
@@ -113,7 +141,7 @@ struct Components {
 	fake_input: Option<OrgKdeKwinFakeInput>,
 	seat: Option<WlSeat>,
 	keyboard: Option<WlKeyboard>,
-	xkb_state: Option<Xkb>,
+	xkb: Option<Xkb>,
 }
 
 const SUPPORTED_SEAT_VERSION: u32 = 10;
@@ -202,7 +230,7 @@ impl Dispatch<WlKeyboard, ()> for Components {
 				std::process::exit(1);
 			};
 
-			components.xkb_state = Some(xkb_state);
+			components.xkb = Some(xkb_state);
 		}
 	}
 }

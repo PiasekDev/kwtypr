@@ -3,7 +3,7 @@ use std::{io, os::fd::OwnedFd};
 use thiserror::Error;
 use xkbcommon::xkb;
 
-mod mapping;
+pub mod mapping;
 
 pub struct Xkb {
 	state: xkb::State,
