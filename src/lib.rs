@@ -95,8 +95,8 @@ impl Kwtypr {
 
 fn send_mapped_key(fake_input: &OrgKdeKwinFakeInput, mapped_key: &MappedKey) {
 	press_modifiers(fake_input, &mapped_key.modifiers);
-	fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Pressed.into());
-	fake_input.keyboard_key(mapped_key.evdev_code, KeyState::Released.into());
+	fake_input.keyboard_key(mapped_key.raw_keycode.into(), KeyState::Pressed.into());
+	fake_input.keyboard_key(mapped_key.raw_keycode.into(), KeyState::Released.into());
 	release_modifiers(fake_input, &mapped_key.modifiers);
 }
 

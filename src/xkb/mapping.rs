@@ -3,13 +3,8 @@ use xkbcommon::xkb;
 
 use super::Xkb;
 
-struct KeycodeMatch {
-	keycode: xkb::Keycode,
-	level: xkb::LevelIndex,
-}
-
 pub struct MappedKey {
-	pub evdev_code: u32,
+	pub raw_keycode: RawKeycode,
 	pub modifiers: Modifiers,
 }
 
@@ -30,10 +25,10 @@ pub enum XkbMappingError {
 		keycode: xkb::Keycode,
 		level: xkb::LevelIndex,
 	},
-	#[error("keycode {keycode:?} for {character:?} cannot be converted to an evdev code")]
-	InvalidEvdevKeycode {
+	#[error("XKB keycode {:?} for {character:?} cannot be converted to a raw keycode", .source.0)]
+	InvalidRawKeycode {
 		character: char,
-		keycode: xkb::Keycode,
+		source: RawKeycodeFromXkbError,
 	},
 }
 
@@ -57,19 +52,26 @@ impl Xkb {
 				level: keycode_match.level,
 			},
 		)?;
-		let evdev_code = xkb_to_evdev(keycode_match.keycode.raw()).ok_or(
-			XkbMappingError::InvalidEvdevKeycode {
+		let raw_keycode = RawKeycode::try_from(keycode_match.keycode).map_err(|e| {
+			XkbMappingError::InvalidRawKeycode {
 				character,
-				keycode: keycode_match.keycode,
-			},
-		)?;
+				source: e,
+			}
+		})?;
 
 		Ok(MappedKey {
-			evdev_code,
+			raw_keycode,
 			modifiers,
 		})
 	}
+}
 
+struct KeycodeMatch {
+	keycode: xkb::Keycode,
+	level: xkb::LevelIndex,
+}
+
+impl Xkb {
 	fn find_keycode_match(
 		&self,
 		keymap: &xkb::Keymap,
@@ -154,7 +156,41 @@ fn has_modifier(mask: xkb::ModMask, modifier_mask: xkb::ModMask) -> bool {
 	mask & modifier_mask != 0
 }
 
-// Wayland/XKB client keycodes are offset by +8 compared to evdev keycodes.
-fn xkb_to_evdev(keycode: u32) -> Option<u32> {
-	keycode.checked_sub(8)
+/// A platform-specific key code that can be interpreted by feeding it to the keyboard mapping
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RawKeycode(u32);
+
+impl RawKeycode {
+	pub fn raw(self) -> u32 {
+		self.0
+	}
+}
+
+impl From<RawKeycode> for u32 {
+	fn from(value: RawKeycode) -> Self {
+		value.0
+	}
+}
+
+#[derive(Debug, Error)]
+#[error("XKB keycode {0:?} is out of range for conversion to a raw keycode")]
+pub struct RawKeycodeFromXkbError(xkb::Keycode);
+
+/// Converts an XKB keycode into the raw keycode used by Wayland key events.
+///
+/// The compositor-provided XKB keymap uses XKB keycodes, while key events are
+/// sent using raw platform keycodes. For the same physical key, the XKB
+/// keycode is the raw keycode plus `8`, so this conversion subtracts `8`.
+///
+/// Returns an error if the XKB keycode is below the representable raw-keycode range.
+impl TryFrom<xkb::Keycode> for RawKeycode {
+	type Error = RawKeycodeFromXkbError;
+
+	fn try_from(value: xkb::Keycode) -> Result<Self, Self::Error> {
+		value
+			.raw()
+			.checked_sub(8)
+			.map(RawKeycode)
+			.ok_or(RawKeycodeFromXkbError(value))
+	}
 }
