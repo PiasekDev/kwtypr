@@ -2,15 +2,11 @@ use thiserror::Error;
 use xkbcommon::xkb;
 
 use super::Xkb;
+pub use super::modifier::Modifiers;
 
 pub struct MappedKey {
 	pub raw_keycode: RawKeycode,
 	pub modifiers: Modifiers,
-}
-
-pub struct Modifiers {
-	pub shift: bool,
-	pub altgr: bool,
 }
 
 #[derive(Debug, Error)]
@@ -45,13 +41,13 @@ impl Xkb {
 		let keycode_match = self
 			.find_keycode_match(&keymap, layout, keysym)
 			.ok_or(XkbMappingError::NoKeyMatch { character })?;
-		let modifiers = modifiers_for_key_level(&keymap, layout, &keycode_match).ok_or(
-			XkbMappingError::UnsupportedModifiers {
+		let modifiers =
+			Modifiers::for_key_level(&keymap, layout, keycode_match.keycode, keycode_match.level)
+				.ok_or(XkbMappingError::UnsupportedModifiers {
 				character,
 				keycode: keycode_match.keycode,
 				level: keycode_match.level,
-			},
-		)?;
+			})?;
 		let raw_keycode = RawKeycode::try_from(keycode_match.keycode).map_err(|e| {
 			XkbMappingError::InvalidRawKeycode {
 				character,
@@ -99,61 +95,6 @@ impl Xkb {
 
 		None
 	}
-}
-
-// Matches the scratch buffer size used in the upstream xkbcommon Rust example.
-const MAX_MODIFIER_MASKS: usize = 100;
-
-fn modifiers_for_key_level(
-	keymap: &xkb::Keymap,
-	layout: xkb::LayoutIndex,
-	keycode_match: &KeycodeMatch,
-) -> Option<Modifiers> {
-	let mut masks = [xkb::ModMask::default(); MAX_MODIFIER_MASKS];
-	let num_masks = keymap.key_get_mods_for_level(
-		keycode_match.keycode,
-		layout,
-		keycode_match.level,
-		&mut masks,
-	);
-
-	let shift_mask = modifier_mask(keymap, xkb::MOD_NAME_SHIFT);
-	let altgr_mask = modifier_mask(keymap, xkb::MOD_NAME_ISO_LEVEL3_SHIFT);
-	let unsupported_modifiers_mask = !(shift_mask | altgr_mask);
-
-	for mask in &masks[..num_masks.min(masks.len())] {
-		if has_unsupported_modifiers(*mask, unsupported_modifiers_mask) {
-			continue;
-		}
-
-		return Some(Modifiers {
-			shift: has_modifier(*mask, shift_mask),
-			altgr: has_modifier(*mask, altgr_mask),
-		});
-	}
-
-	None
-}
-
-fn modifier_mask(keymap: &xkb::Keymap, modifier_name: &str) -> xkb::ModMask {
-	let modifier_index = keymap.mod_get_index(modifier_name);
-	mod_mask_bit(modifier_index).unwrap_or(0)
-}
-
-fn mod_mask_bit(index: xkb::ModIndex) -> Option<xkb::ModMask> {
-	if index == xkb::MOD_INVALID || index >= xkb::ModMask::BITS {
-		return None;
-	}
-
-	Some(1u32 << index)
-}
-
-fn has_unsupported_modifiers(mask: xkb::ModMask, unsupported_modifiers_mask: xkb::ModMask) -> bool {
-	(mask & unsupported_modifiers_mask) != 0
-}
-
-fn has_modifier(mask: xkb::ModMask, modifier_mask: xkb::ModMask) -> bool {
-	mask & modifier_mask != 0
 }
 
 /// A platform-specific key code that can be interpreted by feeding it to the keyboard mapping

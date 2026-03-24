@@ -1,20 +1,17 @@
-use input_linux::Key;
 use thiserror::Error;
 use wayland_client::{
 	ConnectError, Connection, Dispatch, Proxy, QueueHandle,
 	protocol::{
-		wl_keyboard::{self, KeyState, WlKeyboard},
+		wl_keyboard::{self, WlKeyboard},
 		wl_registry,
 		wl_seat::{self, WlSeat},
 	},
 };
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::xkb::{
-	Xkb,
-	mapping::{MappedKey, Modifiers},
-};
+use crate::xkb::Xkb;
 
+mod typing;
 mod xkb;
 
 pub struct Kwtypr {
@@ -69,54 +66,17 @@ impl Kwtypr {
 			return;
 		};
 
-		for character in text.chars() {
-			if let Some(xkb_state) = &self.components.xkb {
-				match xkb_state.key_for_char(character) {
-					Ok(mapped_key) => send_mapped_key(fake_input, &mapped_key),
-					Err(e) => eprintln!(
-						"Failed to map character {:?} to a key event: {}",
-						character, e
-					),
-				}
-			} else {
-				eprintln!(
-					"Cannot map character {:?} to a key event because XKB state is not available",
-					character
-				);
-			}
-		}
+		let Some(xkb_state) = &self.components.xkb else {
+			eprintln!("Cannot send input events because XKB state is not available");
+			return;
+		};
+
+		typing::send_text(fake_input, xkb_state, text);
 
 		self.wayland
 			.event_queue
 			.roundtrip(&mut self.components)
 			.unwrap();
-	}
-}
-
-fn send_mapped_key(fake_input: &OrgKdeKwinFakeInput, mapped_key: &MappedKey) {
-	press_modifiers(fake_input, &mapped_key.modifiers);
-	fake_input.keyboard_key(mapped_key.raw_keycode.into(), KeyState::Pressed.into());
-	fake_input.keyboard_key(mapped_key.raw_keycode.into(), KeyState::Released.into());
-	release_modifiers(fake_input, &mapped_key.modifiers);
-}
-
-fn press_modifiers(fake_input: &OrgKdeKwinFakeInput, modifiers: &Modifiers) {
-	if modifiers.shift {
-		fake_input.keyboard_key(Key::LeftShift.code().into(), KeyState::Pressed.into());
-	}
-
-	if modifiers.altgr {
-		fake_input.keyboard_key(Key::RightAlt.code().into(), KeyState::Pressed.into());
-	}
-}
-
-fn release_modifiers(fake_input: &OrgKdeKwinFakeInput, modifiers: &Modifiers) {
-	if modifiers.shift {
-		fake_input.keyboard_key(Key::LeftShift.code().into(), KeyState::Released.into());
-	}
-
-	if modifiers.altgr {
-		fake_input.keyboard_key(Key::RightAlt.code().into(), KeyState::Released.into());
 	}
 }
 

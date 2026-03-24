@@ -4,6 +4,7 @@ use thiserror::Error;
 use xkbcommon::xkb;
 
 pub mod mapping;
+pub mod modifier;
 
 pub struct Xkb {
 	state: xkb::State,
