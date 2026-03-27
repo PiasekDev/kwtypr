@@ -4,7 +4,7 @@ use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKd
 
 use crate::xkb::{
 	Xkb,
-	mapping::{MappedKey, Modifiers, RawKeycode, XkbMappingError},
+	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
 };
 
 pub fn send_text(fake_input: &OrgKdeKwinFakeInput, xkb: &Xkb, text: &str) {
@@ -31,8 +31,8 @@ struct Typer<'a> {
 
 #[derive(Default)]
 struct ActiveModifiers {
-	shift: Option<RawKeycode>,
-	altgr: Option<RawKeycode>,
+	shift: Option<PlatformKeycode>,
+	altgr: Option<PlatformKeycode>,
 }
 
 impl<'a> Typer<'a> {
@@ -52,14 +52,14 @@ impl<'a> Typer<'a> {
 
 	fn send_mapped_key(&mut self, mapped_key: &MappedKey) {
 		self.transition_modifiers(mapped_key.modifiers);
-		self.send_key(mapped_key.raw_keycode, KeyState::Pressed);
-		self.send_key(mapped_key.raw_keycode, KeyState::Released);
+		self.send_key(mapped_key.keycode, KeyState::Pressed);
+		self.send_key(mapped_key.keycode, KeyState::Released);
 	}
 
 	fn transition_modifiers(&mut self, modifiers: Modifiers) {
 		let target_modifiers = ActiveModifiers {
-			shift: modifiers.shift.map(|shift| shift.raw_keycode()),
-			altgr: modifiers.altgr.map(|altgr| altgr.raw_keycode()),
+			shift: modifiers.shift.map(|shift| shift.keycode()),
+			altgr: modifiers.altgr.map(|altgr| altgr.keycode()),
 		};
 
 		self.active_modifiers.altgr =
@@ -70,9 +70,9 @@ impl<'a> Typer<'a> {
 
 	fn transition_modifier(
 		&self,
-		previous: Option<RawKeycode>,
-		next: Option<RawKeycode>,
-	) -> Option<RawKeycode> {
+		previous: Option<PlatformKeycode>,
+		next: Option<PlatformKeycode>,
+	) -> Option<PlatformKeycode> {
 		match (previous, next) {
 			(None, None) => None,
 			(None, Some(next)) => {
@@ -97,8 +97,7 @@ impl<'a> Typer<'a> {
 		self.active_modifiers.shift = self.transition_modifier(self.active_modifiers.shift, None);
 	}
 
-	fn send_key(&self, raw_keycode: RawKeycode, state: KeyState) {
-		self.fake_input
-			.keyboard_key(raw_keycode.into(), state.into());
+	fn send_key(&self, keycode: PlatformKeycode, state: KeyState) {
+		self.fake_input.keyboard_key(keycode.into(), state.into());
 	}
 }

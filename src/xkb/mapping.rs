@@ -5,7 +5,7 @@ use super::Xkb;
 pub use super::modifier::Modifiers;
 
 pub struct MappedKey {
-	pub raw_keycode: RawKeycode,
+	pub keycode: PlatformKeycode,
 	pub modifiers: Modifiers,
 }
 
@@ -21,10 +21,10 @@ pub enum XkbMappingError {
 		keycode: xkb::Keycode,
 		level: xkb::LevelIndex,
 	},
-	#[error("XKB keycode {:?} for {character:?} cannot be converted to a raw keycode", .source.0)]
-	InvalidRawKeycode {
+	#[error("XKB keycode {keycode:?} for {character:?} cannot be converted to a platform keycode", keycode = .source.0)]
+	InvalidPlatformKeycode {
 		character: char,
-		source: RawKeycodeFromXkbError,
+		source: PlatformKeycodeFromXkbError,
 	},
 }
 
@@ -48,17 +48,14 @@ impl Xkb {
 				keycode: keycode_match.keycode,
 				level: keycode_match.level,
 			})?;
-		let raw_keycode = RawKeycode::try_from(keycode_match.keycode).map_err(|e| {
-			XkbMappingError::InvalidRawKeycode {
+		let keycode = PlatformKeycode::try_from(keycode_match.keycode).map_err(|e| {
+			XkbMappingError::InvalidPlatformKeycode {
 				character,
 				source: e,
 			}
 		})?;
 
-		Ok(MappedKey {
-			raw_keycode,
-			modifiers,
-		})
+		Ok(MappedKey { keycode, modifiers })
 	}
 }
 
@@ -97,41 +94,41 @@ impl Xkb {
 	}
 }
 
-/// A platform-specific key code that can be interpreted by feeding it to the keyboard mapping
+/// A platform-specific key code used in Wayland keyboard events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RawKeycode(u32);
+pub struct PlatformKeycode(u32);
 
-impl RawKeycode {
+impl PlatformKeycode {
 	pub fn raw(self) -> u32 {
 		self.0
 	}
 }
 
-impl From<RawKeycode> for u32 {
-	fn from(value: RawKeycode) -> Self {
+impl From<PlatformKeycode> for u32 {
+	fn from(value: PlatformKeycode) -> Self {
 		value.0
 	}
 }
 
 #[derive(Debug, Error)]
-#[error("XKB keycode {0:?} is out of range for conversion to a raw keycode")]
-pub struct RawKeycodeFromXkbError(xkb::Keycode);
+#[error("XKB keycode {0:?} is out of range for conversion to a platform keycode")]
+pub struct PlatformKeycodeFromXkbError(xkb::Keycode);
 
-/// Converts an XKB keycode into the raw keycode used by Wayland key events.
-///
-/// The compositor-provided XKB keymap uses XKB keycodes, while key events are
-/// sent using raw platform keycodes. For the same physical key, the XKB
-/// keycode is the raw keycode plus `8`, so this conversion subtracts `8`.
-///
-/// Returns an error if the XKB keycode is below the representable raw-keycode range.
-impl TryFrom<xkb::Keycode> for RawKeycode {
-	type Error = RawKeycodeFromXkbError;
+impl TryFrom<xkb::Keycode> for PlatformKeycode {
+	type Error = PlatformKeycodeFromXkbError;
 
+	/// Converts an XKB keycode into the platform keycode used by Wayland key events.
+	///
+	/// The compositor-provided XKB keymap uses XKB keycodes, while key events are
+	/// sent using platform keycodes. For the same physical key, the XKB
+	/// keycode is the platform keycode plus `8`, so this conversion subtracts `8`.
+	///
+	/// Returns an error if the XKB keycode is below the representable platform-keycode range.
 	fn try_from(value: xkb::Keycode) -> Result<Self, Self::Error> {
 		value
 			.raw()
 			.checked_sub(8)
-			.map(RawKeycode)
-			.ok_or(RawKeycodeFromXkbError(value))
+			.map(PlatformKeycode)
+			.ok_or(PlatformKeycodeFromXkbError(value))
 	}
 }

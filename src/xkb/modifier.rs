@@ -1,6 +1,6 @@
 use xkbcommon::xkb;
 
-use crate::xkb::mapping::RawKeycode;
+use crate::xkb::mapping::PlatformKeycode;
 
 // Matches the buffer size used in the upstream xkbcommon Rust example.
 const MAX_MODIFIER_MASKS: usize = 100;
@@ -83,12 +83,12 @@ fn try_build_modifiers(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModifierMapping {
 	mask: xkb::ModMask,
-	raw_keycode: RawKeycode,
+	keycode: PlatformKeycode,
 }
 
 impl ModifierMapping {
-	pub fn raw_keycode(self) -> RawKeycode {
-		self.raw_keycode
+	pub fn keycode(self) -> PlatformKeycode {
+		self.keycode
 	}
 
 	fn from_mask(keymap: &xkb::Keymap, mask: xkb::ModMask) -> Option<Self> {
@@ -96,15 +96,15 @@ impl ModifierMapping {
 			return None;
 		}
 
-		let raw_keycode = find_raw_keycode_for_modifier_mask(keymap, mask)?;
-		Some(Self { mask, raw_keycode })
+		let keycode = find_keycode_for_modifier_mask(keymap, mask)?;
+		Some(Self { mask, keycode })
 	}
 }
 
-pub fn find_raw_keycode_for_modifier_mask(
+pub fn find_keycode_for_modifier_mask(
 	keymap: &xkb::Keymap,
 	target_mask: xkb::ModMask,
-) -> Option<RawKeycode> {
+) -> Option<PlatformKeycode> {
 	if target_mask == 0 {
 		return None;
 	}
@@ -119,7 +119,7 @@ pub fn find_raw_keycode_for_modifier_mask(
 		state.update_key(keycode, xkb::KeyDirection::Up);
 
 		if (active_modifiers & target_mask) == target_mask {
-			return RawKeycode::try_from(keycode).ok();
+			return PlatformKeycode::try_from(keycode).ok();
 		}
 	}
 
