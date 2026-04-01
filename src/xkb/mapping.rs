@@ -36,14 +36,13 @@ impl Xkb {
 			return Err(XkbMappingError::NoSymbol { character });
 		}
 
-		let keymap = self.state.get_keymap();
 		let layout = self.state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
 		let keycode_match = self
-			.find_keycode_match(&keymap, layout, keysym)
+			.find_keycode_match(layout, keysym)
 			.ok_or(XkbMappingError::NoKeyMatch { character })?;
-		let modifiers =
-			Modifiers::for_key_level(&keymap, layout, keycode_match.keycode, keycode_match.level)
-				.ok_or(XkbMappingError::UnsupportedModifiers {
+		let modifiers = self
+			.modifiers_for_key_level(layout, keycode_match.keycode, keycode_match.level)
+			.ok_or(XkbMappingError::UnsupportedModifiers {
 				character,
 				keycode: keycode_match.keycode,
 				level: keycode_match.level,
@@ -67,10 +66,10 @@ struct KeycodeMatch {
 impl Xkb {
 	fn find_keycode_match(
 		&self,
-		keymap: &xkb::Keymap,
 		layout: xkb::LayoutIndex,
 		keysym: xkb::Keysym,
 	) -> Option<KeycodeMatch> {
+		let keymap = &self.keymap;
 		let min_keycode = keymap.min_keycode().raw();
 		let max_keycode = keymap.max_keycode().raw();
 

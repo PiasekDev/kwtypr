@@ -58,8 +58,8 @@ impl<'a> Typer<'a> {
 
 	fn transition_modifiers(&mut self, modifiers: Modifiers) {
 		let target_modifiers = ActiveModifiers {
-			shift: modifiers.shift.map(|shift| shift.keycode()),
-			altgr: modifiers.altgr.map(|altgr| altgr.keycode()),
+			shift: modifiers.shift.map(|shift| shift.keycode),
+			altgr: modifiers.altgr.map(|altgr| altgr.keycode),
 		};
 
 		self.active_modifiers.altgr =
