@@ -6,18 +6,19 @@ use wayland_client::{
 	},
 };
 
-use crate::{wayland::BoundGlobals, xkb::Xkb};
+use crate::{KwtyprError, wayland::InitializationState, xkb::Xkb};
 
-impl Dispatch<WlSeat, ()> for BoundGlobals {
+impl Dispatch<WlSeat, ()> for InitializationState {
 	fn event(
-		globals: &mut Self,
+		state: &mut Self,
 		seat: &WlSeat,
 		event: wl_seat::Event,
 		_user_data: &(),
 		_connection: &Connection,
-		qh: &QueueHandle<BoundGlobals>,
+		qh: &QueueHandle<InitializationState>,
 	) {
-		if let wl_seat::Event::Capabilities { capabilities } = event
+		if let InitializationState::Binding(globals) = state
+			&& let wl_seat::Event::Capabilities { capabilities } = event
 			&& let Ok(capabilities) = capabilities.into_result()
 			&& capabilities.contains(wl_seat::Capability::Keyboard)
 		{
@@ -26,9 +27,9 @@ impl Dispatch<WlSeat, ()> for BoundGlobals {
 	}
 }
 
-impl Dispatch<WlKeyboard, ()> for BoundGlobals {
+impl Dispatch<WlKeyboard, ()> for InitializationState {
 	fn event(
-		globals: &mut Self,
+		state: &mut Self,
 		_: &WlKeyboard,
 		event: wl_keyboard::Event,
 		_: &(),
@@ -38,12 +39,14 @@ impl Dispatch<WlKeyboard, ()> for BoundGlobals {
 		if let wl_keyboard::Event::Keymap { format, fd, size } = event
 			&& let Ok(KeymapFormat::XkbV1) = format.into_result()
 		{
-			let Ok(xkb_state) = Xkb::from_wayland_keymap(fd, size) else {
-				eprintln!("Failed to initialize XKB state from the provided keymap");
-				std::process::exit(1);
-			};
-
-			globals.xkb = Some(xkb_state);
+			match Xkb::from_wayland_keymap(fd, size) {
+				Ok(xkb_state) => {
+					if let InitializationState::Binding(globals) = state {
+						globals.xkb = Some(xkb_state);
+					}
+				}
+				Err(err) => *state = InitializationState::Failed(KwtyprError::from(err)),
+			}
 		}
 	}
 }

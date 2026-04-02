@@ -4,17 +4,21 @@ use wayland_client::{
 };
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::wayland::BoundGlobals;
+use crate::wayland::{Globals, InitializationState};
 
-impl Dispatch<wl_registry::WlRegistry, ()> for BoundGlobals {
+impl Dispatch<wl_registry::WlRegistry, ()> for InitializationState {
 	fn event(
-		globals: &mut Self,
+		state: &mut Self,
 		registry: &wl_registry::WlRegistry,
 		event: wl_registry::Event,
 		_: &(),
 		_: &Connection,
 		qh: &QueueHandle<Self>,
 	) {
+		let InitializationState::Binding(globals) = state else {
+			return;
+		};
+
 		let wl_registry::Event::Global {
 			name,
 			interface,
@@ -39,9 +43,9 @@ impl Dispatch<wl_registry::WlRegistry, ()> for BoundGlobals {
 const SUPPORTED_SEAT_VERSION: u32 = 10;
 
 fn bind_seat_proxy(
-	globals: &mut BoundGlobals,
+	globals: &mut Globals,
 	registry: &wl_registry::WlRegistry,
-	qh: &QueueHandle<BoundGlobals>,
+	qh: &QueueHandle<InitializationState>,
 	name: u32,
 	version: u32,
 ) {
@@ -54,9 +58,9 @@ fn bind_seat_proxy(
 const SUPPORTED_FAKE_INPUT_VERSION: u32 = 6;
 
 fn bind_fake_input_proxy(
-	globals: &mut BoundGlobals,
+	globals: &mut Globals,
 	registry: &wl_registry::WlRegistry,
-	qh: &QueueHandle<BoundGlobals>,
+	qh: &QueueHandle<InitializationState>,
 	name: u32,
 	version: u32,
 ) {
@@ -66,4 +70,4 @@ fn bind_fake_input_proxy(
 	println!("Bound the fake input interface!");
 }
 
-delegate_noop!(BoundGlobals: OrgKdeKwinFakeInput);
+delegate_noop!(InitializationState: OrgKdeKwinFakeInput);
