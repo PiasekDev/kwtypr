@@ -1,8 +1,8 @@
 use kwtypr::{Kwtypr, WaylandConnectError};
 
 fn main() -> Result<(), WaylandConnectError> {
-	let mut kwtypr = Kwtypr::new()?;
-	kwtypr.initialize();
+	let kwtypr = Kwtypr::new()?;
+	let mut kwtypr = kwtypr.initialize();
 	kwtypr.send_text("Zażółć gęślą jaźń");
 	Ok(())
 }

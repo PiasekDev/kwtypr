@@ -6,40 +6,29 @@ use wayland_client::{
 	},
 };
 
-use crate::{Components, xkb::Xkb};
+use crate::{wayland::BoundGlobals, xkb::Xkb};
 
-impl Dispatch<WlSeat, ()> for Components {
+impl Dispatch<WlSeat, ()> for BoundGlobals {
 	fn event(
-		components: &mut Self,
+		globals: &mut Self,
 		seat: &WlSeat,
 		event: wl_seat::Event,
 		_user_data: &(),
 		_connection: &Connection,
-		qh: &QueueHandle<Components>,
+		qh: &QueueHandle<BoundGlobals>,
 	) {
-		let wl_seat::Event::Capabilities { capabilities } = event else {
-			return;
-		};
-
-		let Ok(capabilities) = capabilities.into_result() else {
-			return;
-		};
-
-		if capabilities.contains(wl_seat::Capability::Keyboard) {
-			components.keyboard.get_or_insert_with(|| {
-				let proxy: WlKeyboard = seat.get_keyboard(qh, ());
-				println!("Got a keyboard! {:?}", proxy);
-				proxy
-			});
-		} else {
-			components.keyboard = None;
+		if let wl_seat::Event::Capabilities { capabilities } = event
+			&& let Ok(capabilities) = capabilities.into_result()
+			&& capabilities.contains(wl_seat::Capability::Keyboard)
+		{
+			globals.keyboard = Some(seat.get_keyboard(qh, ()));
 		}
 	}
 }
 
-impl Dispatch<WlKeyboard, ()> for Components {
+impl Dispatch<WlKeyboard, ()> for BoundGlobals {
 	fn event(
-		components: &mut Self,
+		globals: &mut Self,
 		_: &WlKeyboard,
 		event: wl_keyboard::Event,
 		_: &(),
@@ -54,7 +43,7 @@ impl Dispatch<WlKeyboard, ()> for Components {
 				std::process::exit(1);
 			};
 
-			components.xkb = Some(xkb_state);
+			globals.xkb = Some(xkb_state);
 		}
 	}
 }

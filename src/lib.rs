@@ -1,7 +1,12 @@
-use wayland_client::protocol::{wl_keyboard::WlKeyboard, wl_seat::WlSeat};
+use std::mem;
+
+use thiserror::Error;
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::{wayland::WaylandSession, xkb::Xkb};
+use crate::{
+	wayland::{BoundGlobals, WaylandSession},
+	xkb::Xkb,
+};
 
 mod typing;
 mod wayland;
@@ -9,72 +14,79 @@ mod xkb;
 
 pub use crate::wayland::WaylandConnectError;
 
-pub struct Kwtypr {
-	wayland: WaylandSession<Components>,
+pub struct Kwtypr<State> {
+	wayland: WaylandSession,
+	state: State,
+}
+
+pub struct Uninitialized;
+pub struct Ready {
 	components: Components,
 }
 
-impl Kwtypr {
+impl Kwtypr<Uninitialized> {
 	pub fn new() -> Result<Self, WaylandConnectError> {
 		Ok(Self {
 			wayland: WaylandSession::new()?,
-			components: Components::default(),
+			state: Uninitialized,
 		})
 	}
 
-	pub fn initialize(&mut self) {
+	pub fn initialize(mut self) -> Kwtypr<Ready> {
 		let queue_handle = self.wayland.event_queue.handle();
 		let display = self.wayland.connection.display();
 		let _registry = display.get_registry(&queue_handle, ());
-		println!("Advertised globals:");
-		let _ = self.wayland.event_queue.roundtrip(&mut self.components);
 
-		while !self.all_components_available() {
+		while !self.wayland.globals.all_bound() {
 			let _ = self
 				.wayland
 				.event_queue
-				.blocking_dispatch(&mut self.components);
+				.blocking_dispatch(&mut self.wayland.globals);
 		}
 
-		let Some(fake_input) = &self.components.fake_input else {
-			eprintln!("Fake input interface is not available, cannot authenticate");
-			std::process::exit(1);
-		};
+		let components: Components = mem::take(&mut self.wayland.globals)
+			.try_into()
+			.expect("all components to be bound");
 
-		fake_input.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
+		components
+			.fake_input
+			.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
+
+		Kwtypr {
+			wayland: self.wayland,
+			state: Ready { components },
+		}
 	}
+}
 
-	fn all_components_available(&self) -> bool {
-		self.components.fake_input.is_some()
-			&& self.components.seat.is_some()
-			&& self.components.keyboard.is_some()
-			&& self.components.xkb.is_some()
-	}
-
+impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) {
-		let Some(fake_input) = &self.components.fake_input else {
-			eprintln!("Cannot send input events because the fake input interface is not available");
-			return;
-		};
-
-		let Some(xkb_state) = &self.components.xkb else {
-			eprintln!("Cannot send input events because XKB state is not available");
-			return;
-		};
-
-		typing::send_text(fake_input, xkb_state, text);
+		let Components { fake_input, xkb } = &self.state.components;
+		typing::send_text(fake_input, xkb, text);
 
 		self.wayland
 			.event_queue
-			.roundtrip(&mut self.components)
+			.roundtrip(&mut self.wayland.globals)
 			.unwrap();
 	}
 }
 
-#[derive(Default)]
 struct Components {
-	fake_input: Option<OrgKdeKwinFakeInput>,
-	seat: Option<WlSeat>,
-	keyboard: Option<WlKeyboard>,
-	xkb: Option<Xkb>,
+	fake_input: OrgKdeKwinFakeInput,
+	xkb: Xkb,
+}
+
+#[derive(Debug, Error)]
+#[error("cannot transition to Ready state because some components are missing")]
+struct UnintializedComponentsError;
+
+impl TryFrom<BoundGlobals> for Components {
+	type Error = UnintializedComponentsError;
+
+	fn try_from(value: BoundGlobals) -> Result<Self, Self::Error> {
+		Ok(Self {
+			fake_input: value.fake_input.ok_or(UnintializedComponentsError)?,
+			xkb: value.xkb.ok_or(UnintializedComponentsError)?,
+		})
+	}
 }

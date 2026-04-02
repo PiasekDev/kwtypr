@@ -1,16 +1,14 @@
 use wayland_client::{
-	Connection, Dispatch, Proxy, QueueHandle,
+	Connection, Dispatch, Proxy, QueueHandle, delegate_noop,
 	protocol::{wl_registry, wl_seat::WlSeat},
 };
-use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::{
-	self, OrgKdeKwinFakeInput,
-};
+use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::Components;
+use crate::wayland::BoundGlobals;
 
-impl Dispatch<wl_registry::WlRegistry, ()> for Components {
+impl Dispatch<wl_registry::WlRegistry, ()> for BoundGlobals {
 	fn event(
-		components: &mut Self,
+		globals: &mut Self,
 		registry: &wl_registry::WlRegistry,
 		event: wl_registry::Event,
 		_: &(),
@@ -28,10 +26,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Components {
 
 		match interface {
 			_ if interface == WlSeat::interface().name => {
-				bind_seat_proxy(components, registry, qh, name, version)
+				bind_seat_proxy(globals, registry, qh, name, version)
 			}
 			_ if interface == OrgKdeKwinFakeInput::interface().name => {
-				bind_fake_input_proxy(components, registry, qh, name, version)
+				bind_fake_input_proxy(globals, registry, qh, name, version)
 			}
 			_ => (),
 		}
@@ -41,42 +39,31 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Components {
 const SUPPORTED_SEAT_VERSION: u32 = 10;
 
 fn bind_seat_proxy(
-	components: &mut Components,
+	globals: &mut BoundGlobals,
 	registry: &wl_registry::WlRegistry,
-	qh: &QueueHandle<Components>,
+	qh: &QueueHandle<BoundGlobals>,
 	name: u32,
 	version: u32,
 ) {
 	let version = version.min(SUPPORTED_SEAT_VERSION);
 	let proxy: WlSeat = registry.bind(name, version, qh, ());
-	components.seat = Some(proxy);
+	globals.seat = Some(proxy);
 	println!("Bound a seat!");
 }
 
 const SUPPORTED_FAKE_INPUT_VERSION: u32 = 6;
 
 fn bind_fake_input_proxy(
-	components: &mut Components,
+	globals: &mut BoundGlobals,
 	registry: &wl_registry::WlRegistry,
-	qh: &QueueHandle<Components>,
+	qh: &QueueHandle<BoundGlobals>,
 	name: u32,
 	version: u32,
 ) {
 	let version = version.min(SUPPORTED_FAKE_INPUT_VERSION);
 	let proxy: OrgKdeKwinFakeInput = registry.bind(name, version, qh, ());
-	components.fake_input = Some(proxy);
+	globals.fake_input = Some(proxy);
 	println!("Bound the fake input interface!");
 }
 
-impl Dispatch<OrgKdeKwinFakeInput, ()> for Components {
-	fn event(
-		_: &mut Self,
-		_: &OrgKdeKwinFakeInput,
-		_: org_kde_kwin_fake_input::Event,
-		_: &(),
-		_: &Connection,
-		_: &QueueHandle<Self>,
-	) {
-		eprintln!("Received an unexpected event from the fake input interface!");
-	}
-}
+delegate_noop!(BoundGlobals: OrgKdeKwinFakeInput);
