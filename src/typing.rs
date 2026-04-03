@@ -1,3 +1,5 @@
+use std::thread;
+
 use thiserror::Error;
 use wayland_client::protocol::wl_keyboard::KeyState;
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
@@ -6,13 +8,18 @@ use crate::xkb::{
 	Xkb,
 	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
 };
+use crate::KwtyprConfig;
 
-pub fn send_text(fake_input: &OrgKdeKwinFakeInput, xkb: &Xkb, text: &str) {
+pub fn send_text(fake_input: &OrgKdeKwinFakeInput, xkb: &Xkb, text: &str, config: &KwtyprConfig) {
 	let mut typer = Typer::new(fake_input, xkb);
 
 	for character in text.chars() {
 		if let Err(error) = typer.type_char(character) {
 			eprintln!("Failed to type character {character:?} with the current layout: {error}");
+		}
+
+		if !config.character_delay.is_zero() {
+			thread::sleep(config.character_delay);
 		}
 	}
 

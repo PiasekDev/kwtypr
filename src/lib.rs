@@ -1,4 +1,5 @@
 use std::mem;
+use std::time::Duration;
 
 use thiserror::Error;
 use wayland_client::{ConnectError, DispatchError};
@@ -26,8 +27,13 @@ pub enum KwtyprError {
 }
 
 pub struct Kwtypr<State> {
+	config: KwtyprConfig,
 	wayland: WaylandSession,
 	state: State,
+}
+
+pub struct KwtyprConfig {
+	pub character_delay: Duration,
 }
 
 pub struct Uninitialized;
@@ -36,8 +42,9 @@ pub struct Ready {
 }
 
 impl Kwtypr<Uninitialized> {
-	pub fn new() -> Result<Self, KwtyprError> {
+	pub fn with_config(config: KwtyprConfig) -> Result<Self, KwtyprError> {
 		Ok(Self {
+			config,
 			wayland: WaylandSession::new()?,
 			state: Uninitialized,
 		})
@@ -68,6 +75,7 @@ impl Kwtypr<Uninitialized> {
 			.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
 
 		Ok(Kwtypr {
+			config: self.config,
 			wayland: self.wayland,
 			state: Ready { components },
 		})
@@ -77,7 +85,7 @@ impl Kwtypr<Uninitialized> {
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) {
 		let Components { fake_input, xkb } = &self.state.components;
-		typing::send_text(fake_input, xkb, text);
+		typing::send_text(fake_input, xkb, text, &self.config);
 
 		self.wayland
 			.event_queue

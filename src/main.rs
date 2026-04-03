@@ -1,8 +1,50 @@
-use kwtypr::{Kwtypr, KwtyprError};
+use std::time::Duration;
+
+use clap::{Args, Parser};
+use kwtypr::{Kwtypr, KwtyprConfig, KwtyprError};
+
+/// KWtype, but blazingly fast™
+///
+/// Type text using the KDE fake input interface on Wayland.
+/// Uses the current keyboard layout to emit key events through the KDE fake input protocol.
+#[derive(Parser)]
+#[command(version)]
+struct Cli {
+	#[command(flatten)]
+	config: ConfigArgs,
+	#[arg(required = true, value_name = "TEXT")]
+	text: Vec<String>,
+}
+
+#[derive(Args)]
+struct ConfigArgs {
+	#[arg(
+		short = 'd',
+		long = "character-delay",
+		default_value_t = 0,
+		value_name = "MS"
+	)]
+	character_delay_ms: u64,
+}
 
 fn main() -> Result<(), KwtyprError> {
-	let kwtypr = Kwtypr::new()?;
+	let Cli { config, text } = Cli::parse();
+	let config = KwtyprConfig::from(config);
+	let text = text.join(" ");
+	run(&text, config)
+}
+
+fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
+	let kwtypr = Kwtypr::with_config(config)?;
 	let mut kwtypr = kwtypr.initialize()?;
-	kwtypr.send_text("Zażółć gęślą jaźń");
+	kwtypr.send_text(text);
 	Ok(())
+}
+
+impl From<ConfigArgs> for KwtyprConfig {
+	fn from(args: ConfigArgs) -> Self {
+		Self {
+			character_delay: Duration::from_millis(args.character_delay_ms),
+		}
+	}
 }
