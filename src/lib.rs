@@ -14,7 +14,6 @@ mod typing;
 mod wayland;
 mod xkb;
 
-pub use crate::typing::TyperConfig;
 pub use crate::xkb::XkbInitError;
 
 #[derive(Debug, Error)]
@@ -86,9 +85,7 @@ impl Kwtypr<Uninitialized> {
 
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) {
-		let Components { fake_input, xkb } = &self.state.components;
-		let config = TyperConfig::from(&self.config);
-		let mut typer = Typer::new(fake_input, xkb, config);
+		let mut typer = Typer::new(&self.state.components, &self.config);
 		typer.type_text(text);
 
 		self.wayland

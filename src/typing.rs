@@ -1,28 +1,15 @@
-use std::{thread, time::Duration};
+use std::thread;
 
 use thiserror::Error;
 use wayland_client::protocol::wl_keyboard::KeyState;
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
+use crate::Components;
 use crate::KwtyprConfig;
 use crate::xkb::{
 	Xkb,
 	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
 };
-
-pub struct TyperConfig {
-	pub character_delay: Duration,
-	pub character_hold: Duration,
-}
-
-impl From<&KwtyprConfig> for TyperConfig {
-	fn from(config: &KwtyprConfig) -> Self {
-		Self {
-			character_delay: config.character_delay,
-			character_hold: config.character_hold,
-		}
-	}
-}
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -31,7 +18,7 @@ struct TypingError(#[from] XkbMappingError);
 pub struct Typer<'a> {
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
-	config: TyperConfig,
+	config: &'a KwtyprConfig,
 	active_modifiers: ActiveModifiers,
 }
 
@@ -42,7 +29,8 @@ struct ActiveModifiers {
 }
 
 impl<'a> Typer<'a> {
-	pub fn new(fake_input: &'a OrgKdeKwinFakeInput, xkb: &'a Xkb, config: TyperConfig) -> Self {
+	pub fn new(components: &'a Components, config: &'a KwtyprConfig) -> Self {
+		let Components { fake_input, xkb } = components;
 		Self {
 			fake_input,
 			xkb,
