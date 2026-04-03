@@ -1,4 +1,4 @@
-use std::thread;
+use std::{thread, time::Duration};
 
 use thiserror::Error;
 use wayland_client::protocol::wl_keyboard::KeyState;
@@ -8,31 +8,15 @@ use crate::xkb::{
 	Xkb,
 	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
 };
-use crate::KwtyprConfig;
-
-pub fn send_text(fake_input: &OrgKdeKwinFakeInput, xkb: &Xkb, text: &str, config: &KwtyprConfig) {
-	let mut typer = Typer::new(fake_input, xkb);
-
-	for character in text.chars() {
-		if let Err(error) = typer.type_char(character) {
-			eprintln!("Failed to type character {character:?} with the current layout: {error}");
-		}
-
-		if !config.character_delay.is_zero() {
-			thread::sleep(config.character_delay);
-		}
-	}
-
-	typer.release_all_modifiers();
-}
 
 #[derive(Debug, Error)]
 #[error(transparent)]
 struct TypingError(#[from] XkbMappingError);
 
-struct Typer<'a> {
+pub struct Typer<'a> {
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
+	character_delay: Duration,
 	active_modifiers: ActiveModifiers,
 }
 
@@ -43,12 +27,33 @@ struct ActiveModifiers {
 }
 
 impl<'a> Typer<'a> {
-	fn new(fake_input: &'a OrgKdeKwinFakeInput, xkb: &'a Xkb) -> Self {
+	pub fn new(
+		fake_input: &'a OrgKdeKwinFakeInput,
+		xkb: &'a Xkb,
+		character_delay: Duration,
+	) -> Self {
 		Self {
 			fake_input,
 			xkb,
+			character_delay,
 			active_modifiers: ActiveModifiers::default(),
 		}
+	}
+
+	pub fn type_text(&mut self, text: &str) {
+		for character in text.chars() {
+			if let Err(error) = self.type_char(character) {
+				eprintln!(
+					"Failed to type character {character:?} with the current layout: {error}"
+				);
+			}
+
+			if !self.character_delay.is_zero() {
+				thread::sleep(self.character_delay);
+			}
+		}
+
+		self.release_all_modifiers();
 	}
 
 	fn type_char(&mut self, character: char) -> Result<(), TypingError> {

@@ -6,6 +6,7 @@ use wayland_client::{ConnectError, DispatchError};
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
 use crate::{
+	typing::Typer,
 	wayland::{Bindings, WaylandSession},
 	xkb::Xkb,
 };
@@ -85,7 +86,8 @@ impl Kwtypr<Uninitialized> {
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) {
 		let Components { fake_input, xkb } = &self.state.components;
-		typing::send_text(fake_input, xkb, text, &self.config);
+		let mut typer = Typer::new(fake_input, xkb, self.config.character_delay);
+		typer.type_text(text);
 
 		self.wayland
 			.event_queue
