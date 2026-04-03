@@ -12,12 +12,14 @@ use kwtypr::{Kwtypr, KwtyprConfig, KwtyprError};
 struct Cli {
 	#[command(flatten)]
 	config: ConfigArgs,
+	/// Text to type
 	#[arg(required = true, value_name = "TEXT")]
 	text: Vec<String>,
 }
 
 #[derive(Args)]
 struct ConfigArgs {
+	/// Delay N milliseconds between typing each character
 	#[arg(
 		short = 'd',
 		long = "character-delay",
@@ -25,6 +27,14 @@ struct ConfigArgs {
 		value_name = "MS"
 	)]
 	character_delay_ms: u64,
+	/// Hold each character for N milliseconds before releasing it
+	#[arg(
+		short = 'H',
+		long = "character-hold",
+		default_value_t = 0,
+		value_name = "MS"
+	)]
+	character_hold_ms: u64,
 }
 
 fn main() -> Result<(), KwtyprError> {
@@ -45,6 +55,7 @@ impl From<ConfigArgs> for KwtyprConfig {
 	fn from(args: ConfigArgs) -> Self {
 		Self {
 			character_delay: Duration::from_millis(args.character_delay_ms),
+			character_hold: Duration::from_millis(args.character_hold_ms),
 		}
 	}
 }

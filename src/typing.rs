@@ -4,10 +4,25 @@ use thiserror::Error;
 use wayland_client::protocol::wl_keyboard::KeyState;
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
+use crate::KwtyprConfig;
 use crate::xkb::{
 	Xkb,
 	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
 };
+
+pub struct TyperConfig {
+	pub character_delay: Duration,
+	pub character_hold: Duration,
+}
+
+impl From<&KwtyprConfig> for TyperConfig {
+	fn from(config: &KwtyprConfig) -> Self {
+		Self {
+			character_delay: config.character_delay,
+			character_hold: config.character_hold,
+		}
+	}
+}
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -16,7 +31,7 @@ struct TypingError(#[from] XkbMappingError);
 pub struct Typer<'a> {
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
-	character_delay: Duration,
+	config: TyperConfig,
 	active_modifiers: ActiveModifiers,
 }
 
@@ -27,15 +42,11 @@ struct ActiveModifiers {
 }
 
 impl<'a> Typer<'a> {
-	pub fn new(
-		fake_input: &'a OrgKdeKwinFakeInput,
-		xkb: &'a Xkb,
-		character_delay: Duration,
-	) -> Self {
+	pub fn new(fake_input: &'a OrgKdeKwinFakeInput, xkb: &'a Xkb, config: TyperConfig) -> Self {
 		Self {
 			fake_input,
 			xkb,
-			character_delay,
+			config,
 			active_modifiers: ActiveModifiers::default(),
 		}
 	}
@@ -48,8 +59,8 @@ impl<'a> Typer<'a> {
 				);
 			}
 
-			if !self.character_delay.is_zero() {
-				thread::sleep(self.character_delay);
+			if !self.config.character_delay.is_zero() {
+				thread::sleep(self.config.character_delay);
 			}
 		}
 
@@ -65,6 +76,9 @@ impl<'a> Typer<'a> {
 	fn send_mapped_key(&mut self, mapped_key: &MappedKey) {
 		self.transition_modifiers(mapped_key.modifiers);
 		self.send_key(mapped_key.keycode, KeyState::Pressed);
+		if !self.config.character_hold.is_zero() {
+			thread::sleep(self.config.character_hold);
+		}
 		self.send_key(mapped_key.keycode, KeyState::Released);
 	}
 

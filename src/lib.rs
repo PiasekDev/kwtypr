@@ -1,5 +1,4 @@
-use std::mem;
-use std::time::Duration;
+use std::{mem, time::Duration};
 
 use thiserror::Error;
 use wayland_client::{ConnectError, DispatchError};
@@ -15,6 +14,7 @@ mod typing;
 mod wayland;
 mod xkb;
 
+pub use crate::typing::TyperConfig;
 pub use crate::xkb::XkbInitError;
 
 #[derive(Debug, Error)]
@@ -35,6 +35,7 @@ pub struct Kwtypr<State> {
 
 pub struct KwtyprConfig {
 	pub character_delay: Duration,
+	pub character_hold: Duration,
 }
 
 pub struct Uninitialized;
@@ -86,7 +87,8 @@ impl Kwtypr<Uninitialized> {
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) {
 		let Components { fake_input, xkb } = &self.state.components;
-		let mut typer = Typer::new(fake_input, xkb, self.config.character_delay);
+		let config = TyperConfig::from(&self.config);
+		let mut typer = Typer::new(fake_input, xkb, config);
 		typer.type_text(text);
 
 		self.wayland
