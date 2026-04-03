@@ -1,9 +1,11 @@
+use std::mem;
+
 use thiserror::Error;
 use wayland_client::{ConnectError, DispatchError};
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
 use crate::{
-	wayland::{Globals, InitializationState, WaylandSession},
+	wayland::{Bindings, WaylandSession},
 	xkb::Xkb,
 };
 
@@ -46,24 +48,20 @@ impl Kwtypr<Uninitialized> {
 		let display = self.wayland.connection.display();
 		let _registry = display.get_registry(&queue_handle, ());
 
-		while !self.wayland.state.all_globals_bound() {
+		while !self.wayland.bindings.all_bound() {
 			self.wayland
 				.event_queue
-				.blocking_dispatch(&mut self.wayland.state)?;
-
-			match self.wayland.state {
-				InitializationState::Binding(_) => continue,
-				InitializationState::Failed(error) => return Err(error),
-			}
+				.blocking_dispatch(&mut self.wayland.bindings)?;
 		}
 
-		let components: Components = self
-			.wayland
-			.state
-			.take_bound_globals()
-			.expect("bound globals to be available after initialization")
-			.try_into()
-			.expect("all components to be bound");
+		let bindings = mem::take(&mut self.wayland.bindings);
+		let components = match bindings.into_components() {
+			Ok(components) => components,
+			Err(IntoComponentsError::XkbInit(err)) => return Err(err.into()),
+			Err(IntoComponentsError::UninitializedFields) => {
+				panic!("bindings should be fully initialized after all_bound()")
+			}
+		};
 
 		components
 			.fake_input
@@ -83,7 +81,7 @@ impl Kwtypr<Ready> {
 
 		self.wayland
 			.event_queue
-			.roundtrip(&mut self.wayland.state)
+			.roundtrip(&mut self.wayland.bindings)
 			.unwrap();
 	}
 }
@@ -93,17 +91,21 @@ struct Components {
 	xkb: Xkb,
 }
 
-#[derive(Debug, Error)]
-#[error("cannot transition to Ready state because some components are missing")]
-struct UnintializedComponentsError;
+enum IntoComponentsError {
+	UninitializedFields,
+	XkbInit(XkbInitError),
+}
 
-impl TryFrom<Globals> for Components {
-	type Error = UnintializedComponentsError;
-
-	fn try_from(value: Globals) -> Result<Self, Self::Error> {
-		Ok(Self {
-			fake_input: value.fake_input.ok_or(UnintializedComponentsError)?,
-			xkb: value.xkb.ok_or(UnintializedComponentsError)?,
-		})
+impl Bindings {
+	fn into_components(self) -> Result<Components, IntoComponentsError> {
+		let fake_input = self
+			.fake_input
+			.ok_or(IntoComponentsError::UninitializedFields)?;
+		let keymap_fd = self
+			.keymap_fd
+			.ok_or(IntoComponentsError::UninitializedFields)?;
+		let xkb = Xkb::from_wayland_keymap(keymap_fd.fd, keymap_fd.size)
+			.map_err(IntoComponentsError::XkbInit)?;
+		Ok(Components { fake_input, xkb })
 	}
 }

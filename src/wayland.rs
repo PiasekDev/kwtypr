@@ -1,4 +1,4 @@
-use std::mem;
+use std::os::fd::OwnedFd;
 
 use wayland_client::{
 	ConnectError,
@@ -6,58 +6,34 @@ use wayland_client::{
 };
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::{KwtyprError, xkb::Xkb};
-
 mod keyboard;
 mod registry;
 
 pub struct WaylandSession {
 	pub connection: wayland_client::Connection,
-	pub event_queue: wayland_client::EventQueue<InitializationState>,
-	pub state: InitializationState,
-}
-
-pub enum InitializationState {
-	Binding(Globals),
-	Failed(KwtyprError),
+	pub event_queue: wayland_client::EventQueue<Bindings>,
+	pub bindings: Bindings,
 }
 
 #[derive(Default)]
-pub struct Globals {
+pub struct Bindings {
 	pub fake_input: Option<OrgKdeKwinFakeInput>,
 	pub seat: Option<WlSeat>,
 	pub keyboard: Option<WlKeyboard>,
-	pub xkb: Option<Xkb>,
+	pub keymap_fd: Option<KeymapFd>,
 }
 
-impl Globals {
+pub struct KeymapFd {
+	pub fd: OwnedFd,
+	pub size: u32,
+}
+
+impl Bindings {
 	pub fn all_bound(&self) -> bool {
 		self.fake_input.is_some()
 			&& self.seat.is_some()
 			&& self.keyboard.is_some()
-			&& self.xkb.is_some()
-	}
-}
-
-impl Default for InitializationState {
-	fn default() -> Self {
-		Self::Binding(Globals::default())
-	}
-}
-
-impl InitializationState {
-	pub fn all_globals_bound(&self) -> bool {
-		matches!(self, Self::Binding(globals) if globals.all_bound())
-	}
-
-	pub fn take_bound_globals(&mut self) -> Option<Globals> {
-		if let Self::Binding(globals) = self
-			&& globals.all_bound()
-		{
-			Some(mem::take(globals))
-		} else {
-			None
-		}
+			&& self.keymap_fd.is_some()
 	}
 }
 
@@ -68,7 +44,7 @@ impl WaylandSession {
 		Ok(Self {
 			connection,
 			event_queue,
-			state: InitializationState::default(),
+			bindings: Bindings::default(),
 		})
 	}
 }
