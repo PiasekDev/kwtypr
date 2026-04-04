@@ -1,40 +1,42 @@
 use std::thread;
 
-use thiserror::Error;
 use wayland_client::protocol::wl_keyboard::KeyState;
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::Components;
-use crate::KwtyprConfig;
 use crate::xkb::{
 	Xkb,
-	mapping::{MappedKey, Modifiers, PlatformKeycode, XkbMappingError},
+	mapping::{CharacterMappingError, MappedKey, Modifiers, PlatformKeycode},
+	unicode_fallback::UnicodeFallbackKeys,
 };
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-struct TypingError(#[from] XkbMappingError);
+use crate::{KwtyprConfig, Ready, UnicodeFallback};
 
 pub struct Typer<'a> {
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
 	config: &'a KwtyprConfig,
+	unicode_fallback: &'a UnicodeFallback,
 	active_modifiers: ActiveModifiers,
 }
 
 #[derive(Default)]
 struct ActiveModifiers {
+	ctrl: Option<PlatformKeycode>,
 	shift: Option<PlatformKeycode>,
 	altgr: Option<PlatformKeycode>,
 }
 
 impl<'a> Typer<'a> {
-	pub fn new(components: &'a Components, config: &'a KwtyprConfig) -> Self {
-		let Components { fake_input, xkb } = components;
+	pub fn new(ready: &'a Ready, config: &'a KwtyprConfig) -> Self {
+		let Ready {
+			fake_input,
+			xkb,
+			unicode_fallback,
+		} = ready;
 		Self {
 			fake_input,
 			xkb,
 			config,
+			unicode_fallback,
 			active_modifiers: ActiveModifiers::default(),
 		}
 	}
@@ -55,10 +57,19 @@ impl<'a> Typer<'a> {
 		self.release_all_modifiers();
 	}
 
-	fn type_char(&mut self, character: char) -> Result<(), TypingError> {
-		let mapped_key = self.xkb.key_for_char(character)?;
-		self.send_mapped_key(&mapped_key);
-		Ok(())
+	fn type_char(&mut self, character: char) -> Result<(), CharacterMappingError> {
+		match self.xkb.key_for_char(character) {
+			Ok(mapped_key) => {
+				self.send_mapped_key(&mapped_key);
+				Ok(())
+			}
+			Err(error) => match self.unicode_fallback {
+				UnicodeFallback::Disabled => Err(error),
+				UnicodeFallback::Enabled(unicode_fallback_keys) => {
+					self.type_char_with_unicode_fallback(character, unicode_fallback_keys)
+				}
+			},
+		}
 	}
 
 	fn send_mapped_key(&mut self, mapped_key: &MappedKey) {
@@ -70,12 +81,31 @@ impl<'a> Typer<'a> {
 		self.send_key(mapped_key.keycode, KeyState::Released);
 	}
 
+	fn type_char_with_unicode_fallback(
+		&mut self,
+		character: char,
+		unicode_fallback_keys: &UnicodeFallbackKeys,
+	) -> Result<(), CharacterMappingError> {
+		self.send_mapped_key(&unicode_fallback_keys.prefix);
+
+		for hex_digit in format!("{:x}", character as u32).chars() {
+			let mapped_key = self.xkb.key_for_char(hex_digit)?;
+			self.send_mapped_key(&mapped_key);
+		}
+
+		self.send_mapped_key(&unicode_fallback_keys.confirm);
+		Ok(())
+	}
+
 	fn transition_modifiers(&mut self, modifiers: Modifiers) {
 		let target_modifiers = ActiveModifiers {
+			ctrl: modifiers.ctrl.map(|ctrl| ctrl.keycode),
 			shift: modifiers.shift.map(|shift| shift.keycode),
 			altgr: modifiers.altgr.map(|altgr| altgr.keycode),
 		};
 
+		self.active_modifiers.ctrl =
+			self.transition_modifier(self.active_modifiers.ctrl, target_modifiers.ctrl);
 		self.active_modifiers.altgr =
 			self.transition_modifier(self.active_modifiers.altgr, target_modifiers.altgr);
 		self.active_modifiers.shift =
@@ -107,6 +137,7 @@ impl<'a> Typer<'a> {
 	}
 
 	fn release_all_modifiers(&mut self) {
+		self.active_modifiers.ctrl = self.transition_modifier(self.active_modifiers.ctrl, None);
 		self.active_modifiers.altgr = self.transition_modifier(self.active_modifiers.altgr, None);
 		self.active_modifiers.shift = self.transition_modifier(self.active_modifiers.shift, None);
 	}

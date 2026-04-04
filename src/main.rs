@@ -35,6 +35,9 @@ struct ConfigArgs {
 		value_name = "MS"
 	)]
 	character_hold_ms: u64,
+	/// Fall back to Ctrl+Shift+U Unicode input when a character cannot be typed directly
+	#[arg(long)]
+	unicode_fallback: bool,
 }
 
 fn main() -> Result<(), KwtyprError> {
@@ -47,7 +50,7 @@ fn main() -> Result<(), KwtyprError> {
 fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
 	let kwtypr = Kwtypr::with_config(config)?;
 	let mut kwtypr = kwtypr.initialize()?;
-	kwtypr.send_text(text);
+	kwtypr.send_text(text)?;
 	Ok(())
 }
 
@@ -56,6 +59,7 @@ impl From<ConfigArgs> for KwtyprConfig {
 		Self {
 			character_delay: Duration::from_millis(args.character_delay_ms),
 			character_hold: Duration::from_millis(args.character_hold_ms),
+			unicode_fallback: args.unicode_fallback,
 		}
 	}
 }

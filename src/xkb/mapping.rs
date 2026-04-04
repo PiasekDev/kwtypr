@@ -10,49 +10,49 @@ pub struct MappedKey {
 }
 
 #[derive(Debug, Error)]
-pub enum XkbMappingError {
-	#[error("character {character:?} does not map to an XKB keysym")]
-	NoSymbol { character: char },
-	#[error("no key in the active layout produces {character:?}")]
-	NoKeyMatch { character: char },
-	#[error("key {keycode:?} at level {level} for {character:?} requires unsupported modifiers")]
+pub enum CharacterMappingError {
+	#[error("character does not map to an XKB keysym")]
+	NoSymbol,
+	#[error(transparent)]
+	KeyMapping(#[from] KeyMappingError),
+}
+
+#[derive(Debug, Error)]
+pub enum KeyMappingError {
+	#[error("no key in the active layout produces the requested symbol")]
+	NoKeyMatch,
+	#[error("key {keycode:?} at level {level} requires unsupported modifiers")]
 	UnsupportedModifiers {
-		character: char,
 		keycode: xkb::Keycode,
 		level: xkb::LevelIndex,
 	},
-	#[error("XKB keycode {keycode:?} for {character:?} cannot be converted to a platform keycode", keycode = .source.0)]
-	InvalidPlatformKeycode {
-		character: char,
-		source: PlatformKeycodeFromXkbError,
-	},
+	#[error("XKB keycode cannot be converted to a platform keycode")]
+	InvalidPlatformKeycode(#[from] PlatformKeycodeFromXkbError),
 }
 
 impl Xkb {
-	pub fn key_for_char(&self, character: char) -> Result<MappedKey, XkbMappingError> {
+	pub fn key_for_char(&self, character: char) -> Result<MappedKey, CharacterMappingError> {
 		let char_utf32 = character as u32;
 		let keysym = xkb::utf32_to_keysym(char_utf32);
 		if keysym == xkb::keysyms::KEY_NoSymbol.into() {
-			return Err(XkbMappingError::NoSymbol { character });
+			return Err(CharacterMappingError::NoSymbol);
 		}
 
+		Ok(self.key_for_keysym(keysym)?)
+	}
+
+	pub fn key_for_keysym(&self, keysym: xkb::Keysym) -> Result<MappedKey, KeyMappingError> {
 		let layout = self.state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE);
 		let keycode_match = self
 			.find_keycode_match(layout, keysym)
-			.ok_or(XkbMappingError::NoKeyMatch { character })?;
+			.ok_or(KeyMappingError::NoKeyMatch)?;
 		let modifiers = self
 			.modifiers_for_key_level(layout, keycode_match.keycode, keycode_match.level)
-			.ok_or(XkbMappingError::UnsupportedModifiers {
-				character,
+			.ok_or(KeyMappingError::UnsupportedModifiers {
 				keycode: keycode_match.keycode,
 				level: keycode_match.level,
 			})?;
-		let keycode = PlatformKeycode::try_from(keycode_match.keycode).map_err(|e| {
-			XkbMappingError::InvalidPlatformKeycode {
-				character,
-				source: e,
-			}
-		})?;
+		let keycode = PlatformKeycode::try_from(keycode_match.keycode)?;
 
 		Ok(MappedKey { keycode, modifiers })
 	}

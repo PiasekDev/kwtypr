@@ -7,6 +7,7 @@ use crate::xkb::{mapping::Modifiers, modifier::AvailableModifiers};
 
 pub mod mapping;
 mod modifier;
+pub mod unicode_fallback;
 
 pub struct Xkb {
 	state: xkb::State,

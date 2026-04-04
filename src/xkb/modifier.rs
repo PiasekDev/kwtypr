@@ -2,17 +2,22 @@ use xkbcommon::xkb;
 
 use crate::xkb::mapping::PlatformKeycode;
 
-pub struct AvailableModifiers(Modifiers);
+pub struct AvailableModifiers(pub Modifiers);
 
 impl AvailableModifiers {
 	pub fn from_keymap(keymap: &xkb::Keymap) -> Self {
 		Self(Modifiers {
+			ctrl: ModifierMapping::from_name(keymap, xkb::MOD_NAME_CTRL),
 			shift: ModifierMapping::from_name(keymap, xkb::MOD_NAME_SHIFT),
 			altgr: ModifierMapping::from_name(keymap, xkb::MOD_NAME_ISO_LEVEL3_SHIFT),
 		})
 	}
 
 	pub fn modifiers_for_mask(&self, mask: xkb::ModMask) -> Modifiers {
+		let ctrl = self
+			.0
+			.ctrl
+			.filter(|mapping| mask.has_modifier(mapping.mod_mask));
 		let shift = self
 			.0
 			.shift
@@ -21,7 +26,7 @@ impl AvailableModifiers {
 			.0
 			.altgr
 			.filter(|mapping| mask.has_modifier(mapping.mod_mask));
-		Modifiers { shift, altgr }
+		Modifiers { ctrl, shift, altgr }
 	}
 
 	pub fn can_represent(&self, modifier_mask: xkb::ModMask) -> bool {
@@ -30,6 +35,9 @@ impl AvailableModifiers {
 
 	fn mask(&self) -> xkb::ModMask {
 		let mut mask = 0;
+		if let Some(ctrl_mapping) = self.0.ctrl {
+			mask |= ctrl_mapping.mod_mask
+		}
 		if let Some(shift_mapping) = self.0.shift {
 			mask |= shift_mapping.mod_mask
 		}
@@ -42,6 +50,7 @@ impl AvailableModifiers {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Modifiers {
+	pub ctrl: Option<ModifierMapping>,
 	pub shift: Option<ModifierMapping>,
 	pub altgr: Option<ModifierMapping>,
 }

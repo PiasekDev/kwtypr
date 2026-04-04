@@ -7,7 +7,10 @@ use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKd
 use crate::{
 	typing::Typer,
 	wayland::{Bindings, WaylandSession},
-	xkb::Xkb,
+	xkb::{
+		Xkb,
+		unicode_fallback::{UnicodeFallbackInitError, UnicodeFallbackKeys},
+	},
 };
 
 mod typing;
@@ -24,6 +27,8 @@ pub enum KwtyprError {
 	WaylandDispatch(#[from] DispatchError),
 	#[error("failed to initialize XKB state from the provided keymap")]
 	XkbInit(#[from] XkbInitError),
+	#[error(transparent)]
+	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
 }
 
 pub struct Kwtypr<State> {
@@ -35,11 +40,19 @@ pub struct Kwtypr<State> {
 pub struct KwtyprConfig {
 	pub character_delay: Duration,
 	pub character_hold: Duration,
+	pub unicode_fallback: bool,
 }
 
 pub struct Uninitialized;
 pub struct Ready {
-	components: Components,
+	fake_input: OrgKdeKwinFakeInput,
+	xkb: Xkb,
+	unicode_fallback: UnicodeFallback,
+}
+
+enum UnicodeFallback {
+	Disabled,
+	Enabled(UnicodeFallbackKeys),
 }
 
 impl Kwtypr<Uninitialized> {
@@ -63,58 +76,63 @@ impl Kwtypr<Uninitialized> {
 		}
 
 		let bindings = mem::take(&mut self.wayland.bindings);
-		let components = match bindings.into_components() {
-			Ok(components) => components,
-			Err(IntoComponentsError::XkbInit(err)) => return Err(err.into()),
-			Err(IntoComponentsError::UninitializedFields) => {
+		let ready = match bindings.into_ready(&self.config) {
+			Ok(ready) => ready,
+			Err(IntoReadyError::XkbInit(err)) => return Err(err.into()),
+			Err(IntoReadyError::UnicodeFallbackInit(err)) => return Err(err.into()),
+			Err(IntoReadyError::UninitializedFields) => {
 				panic!("bindings should be fully initialized after all_bound()")
 			}
 		};
 
-		components
+		ready
 			.fake_input
 			.authenticate("kwtypr".to_owned(), "KDE Virtual Keyboard Input".to_owned());
 
 		Ok(Kwtypr {
 			config: self.config,
 			wayland: self.wayland,
-			state: Ready { components },
+			state: ready,
 		})
 	}
 }
 
 impl Kwtypr<Ready> {
-	pub fn send_text(&mut self, text: &str) {
-		let mut typer = Typer::new(&self.state.components, &self.config);
+	pub fn send_text(&mut self, text: &str) -> Result<(), KwtyprError> {
+		let mut typer = Typer::new(&self.state, &self.config);
 		typer.type_text(text);
 
 		self.wayland
 			.event_queue
-			.roundtrip(&mut self.wayland.bindings)
-			.unwrap();
+			.roundtrip(&mut self.wayland.bindings)?;
+		Ok(())
 	}
 }
 
-struct Components {
-	fake_input: OrgKdeKwinFakeInput,
-	xkb: Xkb,
-}
-
-enum IntoComponentsError {
+#[derive(Debug, Error)]
+enum IntoReadyError {
+	#[error("not all required Wayland objects were initialized")]
 	UninitializedFields,
-	XkbInit(XkbInitError),
+	#[error(transparent)]
+	XkbInit(#[from] XkbInitError),
+	#[error(transparent)]
+	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
 }
 
 impl Bindings {
-	fn into_components(self) -> Result<Components, IntoComponentsError> {
-		let fake_input = self
-			.fake_input
-			.ok_or(IntoComponentsError::UninitializedFields)?;
-		let keymap_fd = self
-			.keymap_fd
-			.ok_or(IntoComponentsError::UninitializedFields)?;
-		let xkb = Xkb::from_wayland_keymap(keymap_fd.fd, keymap_fd.size)
-			.map_err(IntoComponentsError::XkbInit)?;
-		Ok(Components { fake_input, xkb })
+	fn into_ready(self, config: &KwtyprConfig) -> Result<Ready, IntoReadyError> {
+		let fake_input = self.fake_input.ok_or(IntoReadyError::UninitializedFields)?;
+		let keymap_fd = self.keymap_fd.ok_or(IntoReadyError::UninitializedFields)?;
+		let xkb = Xkb::from_wayland_keymap(keymap_fd.fd, keymap_fd.size)?;
+		let unicode_fallback = if config.unicode_fallback {
+			UnicodeFallback::Enabled(xkb.unicode_fallback_keys()?)
+		} else {
+			UnicodeFallback::Disabled
+		};
+		Ok(Ready {
+			fake_input,
+			xkb,
+			unicode_fallback,
+		})
 	}
 }
