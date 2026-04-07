@@ -19,22 +19,6 @@ mod xkb;
 
 pub use crate::xkb::XkbInitError;
 
-#[derive(Debug, Error)]
-pub enum KwtyprError {
-	#[error("failed to connect to the Wayland compositor")]
-	WaylandConnect(#[from] ConnectError),
-	#[error("failed to dispatch Wayland events")]
-	WaylandDispatch(#[from] DispatchError),
-	#[error("failed to initialize XKB state from the provided keymap")]
-	XkbInit(#[from] XkbInitError),
-	#[error(transparent)]
-	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
-	#[error("failed to initialize the Wayland session")]
-	WaylandInitialize(#[from] WaylandInitializeError),
-	#[error("Wayland I/O failed")]
-	WaylandIo(#[from] WaylandError),
-}
-
 pub struct Kwtypr<State> {
 	config: KwtyprConfig,
 	wayland: WaylandSession,
@@ -60,8 +44,18 @@ enum UnicodeFallback {
 	Enabled(UnicodeFallbackKeys),
 }
 
+#[derive(Debug, Error)]
+pub enum InitializeError {
+	#[error("failed to initialize the Wayland session")]
+	WaylandInitialize(#[from] WaylandInitializeError),
+	#[error("failed to initialize XKB state from the provided keymap")]
+	XkbInit(#[from] XkbInitError),
+	#[error(transparent)]
+	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
+}
+
 impl Kwtypr<Uninitialized> {
-	pub fn with_config(config: KwtyprConfig) -> Result<Self, KwtyprError> {
+	pub fn with_config(config: KwtyprConfig) -> Result<Self, ConnectError> {
 		Ok(Self {
 			config,
 			wayland: WaylandSession::new()?,
@@ -69,7 +63,7 @@ impl Kwtypr<Uninitialized> {
 		})
 	}
 
-	pub fn initialize(mut self) -> Result<Kwtypr<Ready>, KwtyprError> {
+	pub fn initialize(mut self) -> Result<Kwtypr<Ready>, InitializeError> {
 		let queue_handle = self.wayland.event_queue.handle();
 		let display = self.wayland.connection.display();
 		let _registry = display.get_registry(&queue_handle, ());
@@ -98,8 +92,16 @@ impl Kwtypr<Uninitialized> {
 	}
 }
 
+#[derive(Debug, Error)]
+pub enum SendTextError {
+	#[error("Wayland I/O failed")]
+	WaylandIo(#[from] WaylandError),
+	#[error("failed to dispatch Wayland events")]
+	WaylandDispatch(#[from] DispatchError),
+}
+
 impl Kwtypr<Ready> {
-	pub fn send_text(&mut self, text: &str) -> Result<(), KwtyprError> {
+	pub fn send_text(&mut self, text: &str) -> Result<(), SendTextError> {
 		let mut typer = Typer::new(&self.wayland.connection, &self.state, &self.config);
 		typer.type_text(text)?;
 

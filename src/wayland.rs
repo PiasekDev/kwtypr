@@ -65,8 +65,11 @@ pub enum WaylandInitializeError {
 	WaylandDispatch(#[from] DispatchError),
 	#[error(transparent)]
 	WaylandIo(#[from] WaylandError),
-	#[error(transparent)]
-	TimeoutElapsed(#[from] TimeoutElapsed),
+	#[error(
+		"timed out while waiting for Wayland initialization to reach the ready state \
+		- make sure the application desktop entry is installed and its Exec property points to the executable"
+	)]
+	TimeoutElapsed(#[source] TimeoutElapsed),
 }
 
 impl WaylandSession {

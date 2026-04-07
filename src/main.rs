@@ -1,7 +1,8 @@
-use std::time::Duration;
+use std::{error::Error, process::ExitCode, time::Duration};
 
 use clap::{Args, Parser};
-use kwtypr::{Kwtypr, KwtyprConfig, KwtyprError};
+use kwtypr::{InitializeError, Kwtypr, KwtyprConfig, SendTextError};
+use thiserror::Error;
 
 /// KWtype, but blazingly fast™
 ///
@@ -39,11 +40,24 @@ struct ConfigArgs {
 	ready_timeout_ms: u64,
 }
 
-fn main() -> Result<(), KwtyprError> {
+#[derive(Debug, Error)]
+enum KwtyprError {
+	#[error("failed to connect to the Wayland compositor")]
+	WaylandConnect(#[from] wayland_client::ConnectError),
+	#[error(transparent)]
+	Initialize(#[from] InitializeError),
+	#[error(transparent)]
+	SendText(#[from] SendTextError),
+}
+
+fn main() -> ExitCode {
 	let Cli { config, text } = Cli::parse();
 	let config = KwtyprConfig::from(config);
 	let text = text.join(" ");
-	run(&text, config)
+	match run(&text, config) {
+		Ok(()) => ExitCode::SUCCESS,
+		Err(error) => handle_error(error),
+	}
 }
 
 fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
@@ -51,6 +65,18 @@ fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
 	let mut kwtypr = kwtypr.initialize()?;
 	kwtypr.send_text(text)?;
 	Ok(())
+}
+
+fn handle_error(error: KwtyprError) -> ExitCode {
+	eprintln!("kwtypr: {error}");
+
+	let mut source = error.source();
+	while let Some(cause) = source {
+		eprintln!("caused by: {cause}");
+		source = cause.source();
+	}
+
+	ExitCode::FAILURE
 }
 
 impl From<ConfigArgs> for KwtyprConfig {
