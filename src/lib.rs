@@ -6,7 +6,7 @@ use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKd
 
 use crate::{
 	typing::Typer,
-	wayland::{Bindings, WaylandSession},
+	wayland::{Bindings, WaylandInitializeError, WaylandSession},
 	xkb::{
 		Xkb,
 		unicode_fallback::{UnicodeFallbackInitError, UnicodeFallbackKeys},
@@ -29,8 +29,10 @@ pub enum KwtyprError {
 	XkbInit(#[from] XkbInitError),
 	#[error(transparent)]
 	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
-	#[error("failed to flush Wayland requests")]
-	WaylandFlush(#[from] WaylandError),
+	#[error("failed to initialize the Wayland session")]
+	WaylandInitialize(#[from] WaylandInitializeError),
+	#[error("Wayland I/O failed")]
+	WaylandIo(#[from] WaylandError),
 }
 
 pub struct Kwtypr<State> {
@@ -40,6 +42,7 @@ pub struct Kwtypr<State> {
 }
 
 pub struct KwtyprConfig {
+	pub ready_timeout: Option<Duration>,
 	pub character_delay: Duration,
 	pub key_hold: Duration,
 	pub unicode_fallback: bool,
@@ -71,11 +74,7 @@ impl Kwtypr<Uninitialized> {
 		let display = self.wayland.connection.display();
 		let _registry = display.get_registry(&queue_handle, ());
 
-		while !self.wayland.bindings.all_bound() {
-			self.wayland
-				.event_queue
-				.blocking_dispatch(&mut self.wayland.bindings)?;
-		}
+		self.wayland.wait_until_ready(self.config.ready_timeout)?;
 
 		let bindings = mem::take(&mut self.wayland.bindings);
 		let ready = match bindings.into_ready(&self.config) {

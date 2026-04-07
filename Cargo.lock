@@ -153,6 +153,7 @@ name = "kwtypr"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "rustix",
  "thiserror",
  "wayland-client",
  "wayland-protocols-plasma",

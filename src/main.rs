@@ -34,6 +34,9 @@ struct ConfigArgs {
 	/// Fall back to Ctrl+Shift+U Unicode input when a character cannot be typed directly
 	#[arg(long)]
 	unicode_fallback: bool,
+	/// Fail if initialization does not reach the ready state within N milliseconds (0 disables the timeout)
+	#[arg(long = "ready-timeout", default_value_t = 5_000, value_name = "MS")]
+	ready_timeout_ms: u64,
 }
 
 fn main() -> Result<(), KwtyprError> {
@@ -56,6 +59,10 @@ impl From<ConfigArgs> for KwtyprConfig {
 			character_delay: Duration::from_millis(args.character_delay_ms),
 			key_hold: Duration::from_millis(args.key_hold_ms),
 			unicode_fallback: args.unicode_fallback,
+			ready_timeout: match args.ready_timeout_ms {
+				0 => None,
+				millis => Some(Duration::from_millis(millis)),
+			},
 		}
 	}
 }
