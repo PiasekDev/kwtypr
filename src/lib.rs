@@ -41,7 +41,7 @@ pub struct Kwtypr<State> {
 
 pub struct KwtyprConfig {
 	pub character_delay: Duration,
-	pub character_hold: Duration,
+	pub key_hold: Duration,
 	pub unicode_fallback: bool,
 }
 

@@ -92,12 +92,12 @@ impl<'a> Typer<'a> {
 	fn send_mapped_key(&mut self, mapped_key: &MappedKey) -> Result<(), WaylandError> {
 		self.transition_modifiers(mapped_key.modifiers);
 		self.send_key(mapped_key.keycode, KeyState::Pressed);
-		if !self.config.character_hold.is_zero() {
+		if !self.config.key_hold.is_zero() {
 			self.connection.flush()?;
-			thread::sleep(self.config.character_hold);
+			thread::sleep(self.config.key_hold);
 		}
 		self.send_key(mapped_key.keycode, KeyState::Released);
-		if !self.config.character_hold.is_zero() {
+		if !self.config.key_hold.is_zero() {
 			self.connection.flush()?;
 		}
 		Ok(())

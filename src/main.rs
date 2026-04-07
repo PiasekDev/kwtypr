@@ -23,18 +23,14 @@ struct ConfigArgs {
 	#[arg(
 		short = 'd',
 		long = "character-delay",
+		alias = "key-delay",
 		default_value_t = 0,
 		value_name = "MS"
 	)]
 	character_delay_ms: u64,
-	/// Hold each character for N milliseconds before releasing it
-	#[arg(
-		short = 'H',
-		long = "character-hold",
-		default_value_t = 0,
-		value_name = "MS"
-	)]
-	character_hold_ms: u64,
+	/// Hold each key for N milliseconds before releasing it
+	#[arg(short = 'H', long = "key-hold", default_value_t = 0, value_name = "MS")]
+	key_hold_ms: u64,
 	/// Fall back to Ctrl+Shift+U Unicode input when a character cannot be typed directly
 	#[arg(long)]
 	unicode_fallback: bool,
@@ -58,7 +54,7 @@ impl From<ConfigArgs> for KwtyprConfig {
 	fn from(args: ConfigArgs) -> Self {
 		Self {
 			character_delay: Duration::from_millis(args.character_delay_ms),
-			character_hold: Duration::from_millis(args.character_hold_ms),
+			key_hold: Duration::from_millis(args.key_hold_ms),
 			unicode_fallback: args.unicode_fallback,
 		}
 	}
