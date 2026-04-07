@@ -29,20 +29,20 @@ impl AvailableModifiers {
 		Modifiers { ctrl, shift, altgr }
 	}
 
-	pub fn can_represent(&self, modifier_mask: xkb::ModMask) -> bool {
+	pub const fn can_represent(&self, modifier_mask: xkb::ModMask) -> bool {
 		self.mask() & modifier_mask == modifier_mask
 	}
 
-	fn mask(&self) -> xkb::ModMask {
+	const fn mask(&self) -> xkb::ModMask {
 		let mut mask = 0;
 		if let Some(ctrl_mapping) = self.0.ctrl {
-			mask |= ctrl_mapping.mod_mask
+			mask |= ctrl_mapping.mod_mask;
 		}
 		if let Some(shift_mapping) = self.0.shift {
-			mask |= shift_mapping.mod_mask
+			mask |= shift_mapping.mod_mask;
 		}
 		if let Some(altgr_mapping) = self.0.altgr {
-			mask |= altgr_mapping.mod_mask
+			mask |= altgr_mapping.mod_mask;
 		}
 		mask
 	}

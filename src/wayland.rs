@@ -41,7 +41,7 @@ pub struct KeymapFd {
 }
 
 impl Bindings {
-	pub fn all_bound(&self) -> bool {
+	pub const fn all_bound(&self) -> bool {
 		self.fake_input.is_some()
 			&& self.seat.is_some()
 			&& self.keyboard.is_some()
@@ -181,7 +181,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Bindings {
 		bindings: &mut Self,
 		registry: &wl_registry::WlRegistry,
 		event: wl_registry::Event,
-		_: &(),
+		(): &(),
 		_: &Connection,
 		qh: &QueueHandle<Self>,
 	) {
@@ -196,10 +196,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Bindings {
 
 		match interface {
 			_ if interface == WlSeat::interface().name => {
-				bind_seat_proxy(bindings, registry, qh, name, version)
+				bind_seat_proxy(bindings, registry, qh, name, version);
 			}
 			_ if interface == OrgKdeKwinFakeInput::interface().name => {
-				bind_fake_input_proxy(bindings, registry, qh, name, version)
+				bind_fake_input_proxy(bindings, registry, qh, name, version);
 			}
 			_ => (),
 		}
@@ -243,7 +243,7 @@ impl Dispatch<WlSeat, ()> for Bindings {
 		event: wl_seat::Event,
 		_user_data: &(),
 		_connection: &Connection,
-		qh: &QueueHandle<Bindings>,
+		qh: &QueueHandle<Self>,
 	) {
 		if let wl_seat::Event::Capabilities { capabilities } = event
 			&& let Ok(capabilities) = capabilities.into_result()
@@ -259,7 +259,7 @@ impl Dispatch<WlKeyboard, ()> for Bindings {
 		bindings: &mut Self,
 		_: &WlKeyboard,
 		event: wl_keyboard::Event,
-		_: &(),
+		(): &(),
 		_: &Connection,
 		_: &QueueHandle<Self>,
 	) {

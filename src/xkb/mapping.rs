@@ -98,7 +98,7 @@ impl Xkb {
 pub struct PlatformKeycode(u32);
 
 impl PlatformKeycode {
-	pub fn raw(self) -> u32 {
+	pub const fn raw(self) -> u32 {
 		self.0
 	}
 }

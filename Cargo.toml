@@ -3,6 +3,15 @@ name = "kwtypr"
 version = "0.1.0"
 edition = "2024"
 
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+needless_continue = "allow"
+equatable_if_let = "allow"
+
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
 rustix = { version = "1.1.4", features = ["event"] }

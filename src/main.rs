@@ -56,7 +56,7 @@ fn main() -> ExitCode {
 	let text = text.join(" ");
 	match run(&text, config) {
 		Ok(()) => ExitCode::SUCCESS,
-		Err(error) => handle_error(error),
+		Err(error) => handle_error(&error),
 	}
 }
 
@@ -67,7 +67,7 @@ fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
 	Ok(())
 }
 
-fn handle_error(error: KwtyprError) -> ExitCode {
+fn handle_error(error: &KwtyprError) -> ExitCode {
 	eprintln!("kwtypr: {error}");
 
 	let mut source = error.source();
