@@ -20,6 +20,9 @@ struct Cli {
 
 #[derive(Args)]
 struct ConfigArgs {
+	/// Delay N milliseconds before typing begins to improve application compatibility
+	#[arg(long = "initial-delay", default_value_t = 0, value_name = "MS")]
+	initial_delay_ms: u64,
 	/// Delay N milliseconds between typing each character
 	#[arg(
 		short = 'd',
@@ -82,6 +85,7 @@ fn handle_error(error: &KwtyprError) -> ExitCode {
 impl From<ConfigArgs> for KwtyprConfig {
 	fn from(args: ConfigArgs) -> Self {
 		Self {
+			initial_delay: Duration::from_millis(args.initial_delay_ms),
 			character_delay: Duration::from_millis(args.character_delay_ms),
 			key_hold: Duration::from_millis(args.key_hold_ms),
 			unicode_fallback: args.unicode_fallback,

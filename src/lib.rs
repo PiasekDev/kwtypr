@@ -27,6 +27,7 @@ pub struct Kwtypr<State> {
 
 pub struct KwtyprConfig {
 	pub ready_timeout: Option<Duration>,
+	pub initial_delay: Duration,
 	pub character_delay: Duration,
 	pub key_hold: Duration,
 	pub unicode_fallback: bool,

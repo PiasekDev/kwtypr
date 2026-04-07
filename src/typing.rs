@@ -53,6 +53,10 @@ impl<'a> Typer<'a> {
 	}
 
 	pub fn type_text(&mut self, text: &str) -> Result<(), WaylandError> {
+		if !self.config.initial_delay.is_zero() {
+			thread::sleep(self.config.initial_delay);
+		}
+
 		for character in text.chars() {
 			match self.type_char(character) {
 				Ok(()) => (),
