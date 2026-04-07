@@ -1,6 +1,7 @@
 use std::thread;
 
-use wayland_client::protocol::wl_keyboard::KeyState;
+use thiserror::Error;
+use wayland_client::{Connection, backend::WaylandError, protocol::wl_keyboard::KeyState};
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
 use crate::xkb::{
@@ -11,11 +12,20 @@ use crate::xkb::{
 use crate::{KwtyprConfig, Ready, UnicodeFallback};
 
 pub struct Typer<'a> {
+	connection: &'a Connection,
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
 	config: &'a KwtyprConfig,
 	unicode_fallback: &'a UnicodeFallback,
 	active_modifiers: ActiveModifiers,
+}
+
+#[derive(Debug, Error)]
+enum TypeCharError {
+	#[error(transparent)]
+	Mapping(#[from] CharacterMappingError),
+	#[error(transparent)]
+	Flush(#[from] WaylandError),
 }
 
 #[derive(Default)]
@@ -26,13 +36,14 @@ struct ActiveModifiers {
 }
 
 impl<'a> Typer<'a> {
-	pub fn new(ready: &'a Ready, config: &'a KwtyprConfig) -> Self {
+	pub fn new(connection: &'a Connection, state: &'a Ready, config: &'a KwtyprConfig) -> Self {
 		let Ready {
 			fake_input,
 			xkb,
 			unicode_fallback,
-		} = ready;
+		} = state;
 		Self {
+			connection,
 			fake_input,
 			xkb,
 			config,
@@ -41,30 +52,36 @@ impl<'a> Typer<'a> {
 		}
 	}
 
-	pub fn type_text(&mut self, text: &str) {
+	pub fn type_text(&mut self, text: &str) -> Result<(), WaylandError> {
 		for character in text.chars() {
-			if let Err(error) = self.type_char(character) {
-				eprintln!(
-					"Failed to type character {character:?} with the current layout: {error}"
-				);
+			match self.type_char(character) {
+				Ok(()) => (),
+				Err(TypeCharError::Mapping(error)) => {
+					eprintln!(
+						"Failed to type character {character:?} with the current layout: {error}"
+					);
+				}
+				Err(TypeCharError::Flush(error)) => return Err(error),
 			}
 
 			if !self.config.character_delay.is_zero() {
+				self.connection.flush()?;
 				thread::sleep(self.config.character_delay);
 			}
 		}
 
 		self.release_all_modifiers();
+		Ok(())
 	}
 
-	fn type_char(&mut self, character: char) -> Result<(), CharacterMappingError> {
+	fn type_char(&mut self, character: char) -> Result<(), TypeCharError> {
 		match self.xkb.key_for_char(character) {
 			Ok(mapped_key) => {
-				self.send_mapped_key(&mapped_key);
+				self.send_mapped_key(&mapped_key)?;
 				Ok(())
 			}
 			Err(error) => match self.unicode_fallback {
-				UnicodeFallback::Disabled => Err(error),
+				UnicodeFallback::Disabled => Err(error.into()),
 				UnicodeFallback::Enabled(unicode_fallback_keys) => {
 					self.type_char_with_unicode_fallback(character, unicode_fallback_keys)
 				}
@@ -72,28 +89,33 @@ impl<'a> Typer<'a> {
 		}
 	}
 
-	fn send_mapped_key(&mut self, mapped_key: &MappedKey) {
+	fn send_mapped_key(&mut self, mapped_key: &MappedKey) -> Result<(), WaylandError> {
 		self.transition_modifiers(mapped_key.modifiers);
 		self.send_key(mapped_key.keycode, KeyState::Pressed);
 		if !self.config.character_hold.is_zero() {
+			self.connection.flush()?;
 			thread::sleep(self.config.character_hold);
 		}
 		self.send_key(mapped_key.keycode, KeyState::Released);
+		if !self.config.character_hold.is_zero() {
+			self.connection.flush()?;
+		}
+		Ok(())
 	}
 
 	fn type_char_with_unicode_fallback(
 		&mut self,
 		character: char,
 		unicode_fallback_keys: &UnicodeFallbackKeys,
-	) -> Result<(), CharacterMappingError> {
-		self.send_mapped_key(&unicode_fallback_keys.prefix);
+	) -> Result<(), TypeCharError> {
+		self.send_mapped_key(&unicode_fallback_keys.prefix)?;
 
 		for hex_digit in format!("{:x}", character as u32).chars() {
 			let mapped_key = self.xkb.key_for_char(hex_digit)?;
-			self.send_mapped_key(&mapped_key);
+			self.send_mapped_key(&mapped_key)?;
 		}
 
-		self.send_mapped_key(&unicode_fallback_keys.confirm);
+		self.send_mapped_key(&unicode_fallback_keys.confirm)?;
 		Ok(())
 	}
 

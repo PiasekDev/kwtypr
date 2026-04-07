@@ -1,7 +1,7 @@
 use std::{mem, time::Duration};
 
 use thiserror::Error;
-use wayland_client::{ConnectError, DispatchError};
+use wayland_client::{ConnectError, DispatchError, backend::WaylandError};
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
 use crate::{
@@ -29,6 +29,8 @@ pub enum KwtyprError {
 	XkbInit(#[from] XkbInitError),
 	#[error(transparent)]
 	UnicodeFallbackInit(#[from] UnicodeFallbackInitError),
+	#[error("failed to flush Wayland requests")]
+	WaylandFlush(#[from] WaylandError),
 }
 
 pub struct Kwtypr<State> {
@@ -99,8 +101,8 @@ impl Kwtypr<Uninitialized> {
 
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) -> Result<(), KwtyprError> {
-		let mut typer = Typer::new(&self.state, &self.config);
-		typer.type_text(text);
+		let mut typer = Typer::new(&self.wayland.connection, &self.state, &self.config);
+		typer.type_text(text)?;
 
 		self.wayland
 			.event_queue
