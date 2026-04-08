@@ -17,7 +17,6 @@ install profile=default_profile prefix=default_prefix: (build profile)
 	mkdir -p "{{prefix}}/share/applications"
 	sed \
 		-e 's|@exec@|{{prefix}}/bin/{{app_name}}|g' \
-		-e 's|@display_name@|kwtypr|g' \
 		"{{repo_root}}/dist/{{app_name}}.desktop.in" > "{{prefix}}/share/applications/{{app_name}}.desktop"
 	@just --justfile "{{repo_root}}/justfile" _refresh-desktop-cache "{{prefix}}/share/applications"
 	@echo "Installed {{prefix}}/bin/{{app_name}}"
@@ -27,7 +26,6 @@ install-dev profile=default_profile: (build profile)
 	mkdir -p "{{user_applications_dir}}"
 	sed \
 		-e 's|@exec@|{{repo_root}}/target/{{profile}}/{{app_name}}|g' \
-		-e 's|@display_name@|kwtypr|g' \
 		"{{repo_root}}/dist/{{app_name}}.desktop.in" > "{{user_applications_dir}}/{{app_name}}.desktop"
 	@just --justfile "{{repo_root}}/justfile" _refresh-desktop-cache "{{user_applications_dir}}"
 	@echo "Installed {{user_applications_dir}}/{{app_name}}.desktop"
