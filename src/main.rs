@@ -1,7 +1,7 @@
 use std::{error::Error, process::ExitCode, time::Duration};
 
 use clap::{Args, Parser};
-use kwtypr::{InitializeError, Kwtypr, KwtyprConfig, SendTextError};
+use kwtypr::{InitializeError, Kwtypr, KwtyprConfig, SendTextError, TypingOutcome};
 use thiserror::Error;
 
 /// KWtype, but blazingly fast™
@@ -58,16 +58,22 @@ fn main() -> ExitCode {
 	let config = KwtyprConfig::from(config);
 	let text = text.join(" ");
 	match run(&text, config) {
-		Ok(()) => ExitCode::SUCCESS,
+		Ok(TypingOutcome::Complete) => ExitCode::SUCCESS,
+		Ok(TypingOutcome::Partial { failed_characters }) => {
+			let suffix = if failed_characters == 1 { "" } else { "s" };
+			eprintln!(
+				"kwtypr: {failed_characters} character{suffix} could not be typed with the current layout"
+			);
+			ExitCode::from(2)
+		}
 		Err(error) => handle_error(&error),
 	}
 }
 
-fn run(text: &str, config: KwtyprConfig) -> Result<(), KwtyprError> {
+fn run(text: &str, config: KwtyprConfig) -> Result<TypingOutcome, KwtyprError> {
 	let kwtypr = Kwtypr::with_config(config)?;
 	let mut kwtypr = kwtypr.initialize()?;
-	kwtypr.send_text(text)?;
-	Ok(())
+	Ok(kwtypr.send_text(text)?)
 }
 
 fn handle_error(error: &KwtyprError) -> ExitCode {

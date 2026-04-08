@@ -35,6 +35,11 @@ struct ActiveModifiers {
 	altgr: Option<PlatformKeycode>,
 }
 
+pub enum TypingOutcome {
+	Complete,
+	Partial { failed_characters: usize },
+}
+
 impl<'a> Typer<'a> {
 	pub fn new(connection: &'a Connection, state: &'a Ready, config: &'a KwtyprConfig) -> Self {
 		let Ready {
@@ -52,10 +57,12 @@ impl<'a> Typer<'a> {
 		}
 	}
 
-	pub fn type_text(&mut self, text: &str) -> Result<(), WaylandError> {
+	pub fn type_text(&mut self, text: &str) -> Result<TypingOutcome, WaylandError> {
 		if !self.config.initial_delay.is_zero() {
 			thread::sleep(self.config.initial_delay);
 		}
+
+		let mut failed_characters = 0;
 
 		for character in text.chars() {
 			match self.type_char(character) {
@@ -64,6 +71,7 @@ impl<'a> Typer<'a> {
 					eprintln!(
 						"Failed to type character {character:?} with the current layout: {error}"
 					);
+					failed_characters += 1;
 				}
 				Err(TypeCharError::Flush(error)) => return Err(error),
 			}
@@ -75,7 +83,11 @@ impl<'a> Typer<'a> {
 		}
 
 		self.release_all_modifiers();
-		Ok(())
+		Ok(if failed_characters == 0 {
+			TypingOutcome::Complete
+		} else {
+			TypingOutcome::Partial { failed_characters }
+		})
 	}
 
 	fn type_char(&mut self, character: char) -> Result<(), TypeCharError> {

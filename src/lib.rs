@@ -17,7 +17,7 @@ mod typing;
 mod wayland;
 mod xkb;
 
-pub use crate::xkb::XkbInitError;
+pub use crate::{typing::TypingOutcome, xkb::XkbInitError};
 
 pub struct Kwtypr<State> {
 	config: KwtyprConfig,
@@ -102,14 +102,14 @@ pub enum SendTextError {
 }
 
 impl Kwtypr<Ready> {
-	pub fn send_text(&mut self, text: &str) -> Result<(), SendTextError> {
+	pub fn send_text(&mut self, text: &str) -> Result<TypingOutcome, SendTextError> {
 		let mut typer = Typer::new(&self.wayland.connection, &self.state, &self.config);
-		typer.type_text(text)?;
+		let outcome = typer.type_text(text)?;
 
 		self.wayland
 			.event_queue
 			.roundtrip(&mut self.wayland.bindings)?;
-		Ok(())
+		Ok(outcome)
 	}
 }
 
