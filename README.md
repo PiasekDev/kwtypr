@@ -24,6 +24,8 @@ This builds `kwtypr`, installs the binary to `~/.local/bin/kwtypr`, installs the
 
 If `~/.local/bin` is not on your `PATH`, add it before trying to run `kwtypr`.
 
+Shell completions are not installed automatically. See [Shell Completions](#shell-completions) below.
+
 For a different prefix, for example a system-wide install under `/usr/local`, run:
 
 ```sh
@@ -54,6 +56,24 @@ Useful options:
 - `--key-hold <MS>`: hold each key before release, default `0`
 - `--unicode-fallback`: enable `Ctrl+Shift+U` Unicode input fallback
 - `--ready-timeout <MS>`: fail if Wayland initialization takes too long, default `5000` (`0` disables the timeout)
+
+## Shell Completions
+
+`kwtypr` can generate shell completions at runtime:
+
+```sh
+kwtypr completions bash
+```
+
+You can install the generated completions manually. Common locations are:
+
+```sh
+kwtypr completions bash > ~/.local/share/bash-completion/completions/kwtypr
+kwtypr completions zsh > ~/.local/share/zsh/site-functions/_kwtypr
+kwtypr completions fish > ~/.config/fish/completions/kwtypr.fish
+```
+
+Available shells depend on what `clap_complete` supports for the installed version. Run `kwtypr completions --help` for the current list.
 
 ## Differences From KWtype
 

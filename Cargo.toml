@@ -21,6 +21,7 @@ equatable_if_let = "allow"
 
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
+clap_complete = "4.5.59"
 rustix = { version = "1.1.4", features = ["event"] }
 thiserror = "2.0.18"
 wayland-client = "0.31.13"

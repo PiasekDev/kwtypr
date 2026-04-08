@@ -1,6 +1,7 @@
-use std::{error::Error, process::ExitCode, time::Duration};
+use std::{error::Error, io, process::ExitCode, time::Duration};
 
-use clap::{Args, Parser};
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 use kwtypr::{InitializeError, Kwtypr, KwtyprConfig, SendTextError, TypingOutcome};
 use thiserror::Error;
 
@@ -9,13 +10,29 @@ use thiserror::Error;
 /// Type text using the KDE fake input interface on Wayland.
 /// Uses the current keyboard layout to emit key events through the KDE fake input protocol.
 #[derive(Parser)]
-#[command(version)]
+#[command(
+	version,
+	args_conflicts_with_subcommands = true,
+	subcommand_negates_reqs = true
+)]
 struct Cli {
 	#[command(flatten)]
 	config: ConfigArgs,
+	#[command(subcommand)]
+	command: Option<Command>,
 	/// Text to type
 	#[arg(required = true, value_name = "TEXT")]
 	text: Vec<String>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+	/// Generate shell completion scripts
+	#[command(alias = "completion")]
+	Completions {
+		/// Shell to generate completions for
+		shell: Shell,
+	},
 }
 
 #[derive(Args)]
@@ -54,7 +71,16 @@ enum KwtyprError {
 }
 
 fn main() -> ExitCode {
-	let Cli { config, text } = Cli::parse();
+	let Cli {
+		config,
+		command,
+		text,
+	} = Cli::parse();
+	if let Some(Command::Completions { shell }) = command {
+		generate_completions(shell);
+		return ExitCode::SUCCESS;
+	}
+
 	let config = KwtyprConfig::from(config);
 	let text = text.join(" ");
 	match run(&text, config) {
@@ -68,6 +94,16 @@ fn main() -> ExitCode {
 		}
 		Err(error) => handle_error(&error),
 	}
+}
+
+fn generate_completions(shell: Shell) {
+	let mut command = Cli::command();
+	generate(
+		shell,
+		&mut command,
+		env!("CARGO_PKG_NAME"),
+		&mut io::stdout(),
+	);
 }
 
 fn run(text: &str, config: KwtyprConfig) -> Result<TypingOutcome, KwtyprError> {
