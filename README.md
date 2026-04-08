@@ -44,17 +44,21 @@ kwtypr [OPTIONS] <TEXT>...
 
 Positional arguments are joined with spaces before typing.
 
+By default, `kwtypr` types at full speed with no artificial delays: `--initial-delay 0`, `--character-delay 0`, and `--key-hold 0`. `--ready-timeout` defaults to `5000`, and Unicode fallback is disabled unless `--unicode-fallback` is passed.
+
 Useful options:
 
-- `--initial-delay <MS>`: wait before typing starts
-- `--character-delay <MS>`: wait between characters
-- `--key-hold <MS>`: hold each key before release
+- `--initial-delay <MS>`: wait before typing starts, default `0`
+- `--character-delay <MS>`: wait between characters, default `0`
+- `--key-delay <MS>`: alias for `--character-delay` for KWtype compatibility
+- `--key-hold <MS>`: hold each key before release, default `0`
 - `--unicode-fallback`: enable `Ctrl+Shift+U` Unicode input fallback
-- `--ready-timeout <MS>`: fail if Wayland initialization takes too long
+- `--ready-timeout <MS>`: fail if Wayland initialization takes too long, default `5000` (`0` disables the timeout)
 
 ## Differences From KWtype
 
 - `kwtypr` joins positional arguments with spaces, so `kwtypr hello world` types `hello world`.
+- `kwtypr` defaults to typing at full speed with no artificial delays or key hold.
 - Unicode fallback is not enabled by default. Pass `--unicode-fallback` if you want `Ctrl+Shift+U` fallback for characters that cannot be typed directly with the current layout.
 - If typing completes but some characters could not be mapped, `kwtypr` keeps going, reports the failures, and exits with code `2`.
 
