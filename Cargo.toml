@@ -2,6 +2,13 @@
 name = "kwtypr"
 version = "0.1.0"
 edition = "2024"
+description = "Type text through KWin's fake input protocol on Wayland"
+license = "MIT"
+readme = "README.md"
+homepage = "https://piasek.dev/kwtypr"
+repository = "https://github.com/PiasekDev/kwtypr"
+keywords = ["wayland", "kde", "keyboard", "plasma", "cli"]
+categories = ["command-line-utilities"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
