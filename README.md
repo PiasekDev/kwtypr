@@ -46,14 +46,15 @@ kwtypr [OPTIONS] <TEXT>...
 
 Positional arguments are joined with spaces before typing.
 
-By default, `kwtypr` types at full speed with no artificial delays: `--initial-delay 0`, `--character-delay 0`, and `--key-hold 0`. `--ready-timeout` defaults to `5000`, and Unicode fallback is disabled unless `--unicode-fallback` is passed.
+By default, `kwtypr` aims for maximum throughput: `--initial-delay 0`, `--character-delay 0`, and `--key-hold 0`, with no extra Wayland flushes before the final roundtrip. `--ready-timeout` defaults to `5000`, and Unicode fallback is disabled unless `--unicode-fallback` is passed.
 
-Useful options:
+Timing and compatibility options:
 
 - `--initial-delay <MS>`: wait before typing starts, default `0`
 - `--character-delay <MS>`: wait between characters, default `0`
 - `--key-delay <MS>`: alias for `--character-delay` for KWtype compatibility
 - `--key-hold <MS>`: hold each key before release, default `0`
+- `--flush-every <N>`: flush after every `N` input characters; unset by default, so flushes only happen when needed for delays or the final roundtrip
 - `--unicode-fallback`: enable `Ctrl+Shift+U` Unicode input fallback
 - `--ready-timeout <MS>`: fail if Wayland initialization takes too long, default `5000` (`0` disables the timeout)
 
@@ -78,7 +79,7 @@ Available shells depend on what `clap_complete` supports for the installed versi
 ## Differences From KWtype
 
 - `kwtypr` joins positional arguments with spaces, so `kwtypr hello world` types `hello world`.
-- `kwtypr` defaults to typing at full speed with no artificial delays or key hold.
+- `kwtypr` defaults to maximum-throughput typing with no artificial delays, no key hold, and no extra flushes before the final roundtrip.
 - Unicode fallback is not enabled by default. Pass `--unicode-fallback` if you want `Ctrl+Shift+U` fallback for characters that cannot be typed directly with the current layout.
 - If typing completes but some characters could not be mapped, `kwtypr` keeps going, reports the failures, and exits with code `2`.
 
@@ -97,6 +98,14 @@ kwtypr --initial-delay 1 "example text"
 ```
 
 In practice, an initial delay of `1` millisecond appears to fix input in Google Chrome in setups where Chromium works without it.
+
+If an application behaves better when input is flushed more frequently, increase flush frequency explicitly:
+
+```sh
+kwtypr --flush-every 16 "example text"
+```
+
+Lower values flush more often and may improve compatibility at the cost of throughput.
 
 If a character cannot be typed directly with the current layout, enable Unicode fallback explicitly:
 

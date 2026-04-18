@@ -63,10 +63,14 @@ impl<'a> Typer<'a> {
 		}
 
 		let mut failed_characters = 0;
+		let mut queued_characters = 0;
+		let has_character_delay = !self.config.character_delay.is_zero();
 
 		for character in text.chars() {
 			match self.type_char(character) {
-				Ok(()) => (),
+				Ok(()) => {
+					queued_characters += 1;
+				}
 				Err(TypeCharError::Mapping(error)) => {
 					eprintln!(
 						"Failed to type character {character:?} with the current layout: {error}"
@@ -76,13 +80,23 @@ impl<'a> Typer<'a> {
 				Err(TypeCharError::Flush(error)) => return Err(error),
 			}
 
-			if !self.config.character_delay.is_zero() {
+			if self.should_flush_after_character(queued_characters) || has_character_delay {
 				self.connection.flush()?;
+				queued_characters = 0;
+			}
+
+			if has_character_delay {
 				thread::sleep(self.config.character_delay);
 			}
 		}
 
 		self.release_all_modifiers();
+
+		// Do a final flush of queued key events (loop + modifiers) in the flush_every case
+		if self.config.flush_every.is_some() {
+			self.connection.flush()?;
+		}
+
 		Ok(if failed_characters == 0 {
 			TypingOutcome::Complete
 		} else {
@@ -182,5 +196,11 @@ impl<'a> Typer<'a> {
 
 	fn send_key(&self, keycode: PlatformKeycode, state: KeyState) {
 		self.fake_input.keyboard_key(keycode.into(), state.into());
+	}
+
+	fn should_flush_after_character(&self, queued_characters: u32) -> bool {
+		self.config
+			.flush_every
+			.is_some_and(|flush_every| queued_characters >= flush_every.get())
 	}
 }

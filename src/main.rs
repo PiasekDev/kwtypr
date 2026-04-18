@@ -1,4 +1,4 @@
-use std::{error::Error, io, process::ExitCode, time::Duration};
+use std::{error::Error, io, num::NonZeroU32, process::ExitCode, time::Duration};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
@@ -52,6 +52,9 @@ struct ConfigArgs {
 	/// Hold each key for N milliseconds before releasing it
 	#[arg(short = 'H', long = "key-hold", default_value_t = 0, value_name = "MS")]
 	key_hold_ms: u64,
+	/// Flush queued input after every N input characters
+	#[arg(long = "flush-every", value_name = "N")]
+	flush_every: Option<NonZeroU32>,
 	/// Fall back to Ctrl+Shift+U Unicode input when a character cannot be typed directly
 	#[arg(long)]
 	unicode_fallback: bool,
@@ -130,6 +133,7 @@ impl From<ConfigArgs> for KwtyprConfig {
 			initial_delay: Duration::from_millis(args.initial_delay_ms),
 			character_delay: Duration::from_millis(args.character_delay_ms),
 			key_hold: Duration::from_millis(args.key_hold_ms),
+			flush_every: args.flush_every,
 			unicode_fallback: args.unicode_fallback,
 			ready_timeout: match args.ready_timeout_ms {
 				0 => None,

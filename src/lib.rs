@@ -1,4 +1,4 @@
-use std::{mem, time::Duration};
+use std::{mem, num::NonZeroU32, time::Duration};
 
 use thiserror::Error;
 use wayland_client::{ConnectError, DispatchError, backend::WaylandError};
@@ -30,6 +30,7 @@ pub struct KwtyprConfig {
 	pub initial_delay: Duration,
 	pub character_delay: Duration,
 	pub key_hold: Duration,
+	pub flush_every: Option<NonZeroU32>,
 	pub unicode_fallback: bool,
 }
 
