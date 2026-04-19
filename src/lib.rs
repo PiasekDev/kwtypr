@@ -104,7 +104,7 @@ pub enum SendTextError {
 
 impl Kwtypr<Ready> {
 	pub fn send_text(&mut self, text: &str) -> Result<TypingOutcome, SendTextError> {
-		let mut typer = Typer::new(&self.wayland.connection, &self.state, &self.config);
+		let mut typer = Typer::new(&self.wayland, &self.state, &self.config);
 		let outcome = typer.type_text(text)?;
 
 		self.wayland

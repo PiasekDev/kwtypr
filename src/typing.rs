@@ -1,18 +1,21 @@
 use std::thread;
 
 use thiserror::Error;
-use wayland_client::{Connection, backend::WaylandError, protocol::wl_keyboard::KeyState};
+use wayland_client::{backend::WaylandError, protocol::wl_keyboard::KeyState};
 use wayland_protocols_plasma::fake_input::client::org_kde_kwin_fake_input::OrgKdeKwinFakeInput;
 
-use crate::xkb::{
-	Xkb,
-	mapping::{CharacterMappingError, MappedKey, Modifiers, PlatformKeycode},
-	unicode_fallback::UnicodeFallbackKeys,
-};
 use crate::{KwtyprConfig, Ready, UnicodeFallback};
+use crate::{
+	wayland::WaylandSession,
+	xkb::{
+		Xkb,
+		mapping::{CharacterMappingError, MappedKey, Modifiers, PlatformKeycode},
+		unicode_fallback::UnicodeFallbackKeys,
+	},
+};
 
 pub struct Typer<'a> {
-	connection: &'a Connection,
+	wayland: &'a WaylandSession,
 	fake_input: &'a OrgKdeKwinFakeInput,
 	xkb: &'a Xkb,
 	config: &'a KwtyprConfig,
@@ -41,14 +44,14 @@ pub enum TypingOutcome {
 }
 
 impl<'a> Typer<'a> {
-	pub fn new(connection: &'a Connection, state: &'a Ready, config: &'a KwtyprConfig) -> Self {
+	pub fn new(wayland: &'a WaylandSession, state: &'a Ready, config: &'a KwtyprConfig) -> Self {
 		let Ready {
 			fake_input,
 			xkb,
 			unicode_fallback,
 		} = state;
 		Self {
-			connection,
+			wayland,
 			fake_input,
 			xkb,
 			config,
@@ -81,7 +84,7 @@ impl<'a> Typer<'a> {
 			}
 
 			if self.should_flush_after_character(queued_characters) || has_character_delay {
-				self.connection.flush()?;
+				self.wayland.flush_blocking()?;
 				queued_characters = 0;
 			}
 
@@ -94,7 +97,7 @@ impl<'a> Typer<'a> {
 
 		// Do a final flush of queued key events (loop + modifiers) in the flush_every case
 		if self.config.flush_every.is_some() {
-			self.connection.flush()?;
+			self.wayland.flush_blocking()?;
 		}
 
 		Ok(if failed_characters == 0 {
@@ -123,12 +126,12 @@ impl<'a> Typer<'a> {
 		self.transition_modifiers(mapped_key.modifiers);
 		self.send_key(mapped_key.keycode, KeyState::Pressed);
 		if !self.config.key_hold.is_zero() {
-			self.connection.flush()?;
+			self.wayland.flush_blocking()?;
 			thread::sleep(self.config.key_hold);
 		}
 		self.send_key(mapped_key.keycode, KeyState::Released);
 		if !self.config.key_hold.is_zero() {
-			self.connection.flush()?;
+			self.wayland.flush_blocking()?;
 		}
 		Ok(())
 	}

@@ -1,6 +1,6 @@
 use std::{
-	io::Error,
-	os::fd::OwnedFd,
+	io::{Error, ErrorKind},
+	os::fd::{AsFd, OwnedFd},
 	time::{Duration, Instant},
 };
 
@@ -101,6 +101,19 @@ impl WaylandSession {
 		Ok(())
 	}
 
+	pub fn flush_blocking(&self) -> Result<(), WaylandError> {
+		loop {
+			match self.connection.flush() {
+				Ok(()) => return Ok(()),
+				Err(WaylandError::Io(error)) if error.kind() == ErrorKind::WouldBlock => {
+					// `EAGAIN` maps to `WouldBlock`, so wait until the connection is writable and try again.
+					wait_until_connection_writable(&self.connection)?;
+				}
+				Err(error) => return Err(error),
+			}
+		}
+	}
+
 	fn dispatch_pending(&mut self) -> Result<usize, DispatchError> {
 		self.event_queue.dispatch_pending(&mut self.bindings)
 	}
@@ -147,6 +160,19 @@ fn blocking_read_with_timeout(
 
 	let _dispatched_amount = read_guard.read()?;
 	Ok(())
+}
+
+fn wait_until_connection_writable(connection: &Connection) -> Result<(), WaylandError> {
+	let fd = connection.as_fd();
+	let mut poll_fds = [PollFd::new(&fd, PollFlags::OUT | PollFlags::ERR)];
+
+	loop {
+		match poll(&mut poll_fds, None) {
+			Ok(_) => return Ok(()),
+			Err(Errno::INTR) => continue,
+			Err(errno) => return Err(WaylandError::from(Error::from(errno))),
+		}
+	}
 }
 
 struct Timeout {
