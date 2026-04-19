@@ -67,7 +67,6 @@ impl<'a> Typer<'a> {
 
 		let mut failed_characters = 0;
 		let mut queued_characters = 0;
-		let has_character_delay = !self.config.character_delay.is_zero();
 
 		for character in text.chars() {
 			match self.type_char(character) {
@@ -83,20 +82,19 @@ impl<'a> Typer<'a> {
 				Err(TypeCharError::Flush(error)) => return Err(error),
 			}
 
-			if self.should_flush_after_character(queued_characters) || has_character_delay {
+			if let Some(chunk_pacing) = &self.config.chunk_pacing
+				&& queued_characters >= chunk_pacing.size.get()
+			{
 				self.wayland.flush_blocking()?;
+				thread::sleep(chunk_pacing.delay);
 				queued_characters = 0;
-			}
-
-			if has_character_delay {
-				thread::sleep(self.config.character_delay);
 			}
 		}
 
 		self.release_all_modifiers();
 
-		// Do a final flush of queued key events (loop + modifiers) in the flush_every case
-		if self.config.flush_every.is_some() {
+		// Flush any trailing partial chunk and the final modifier releases
+		if self.config.chunk_pacing.is_some() {
 			self.wayland.flush_blocking()?;
 		}
 
@@ -199,11 +197,5 @@ impl<'a> Typer<'a> {
 
 	fn send_key(&self, keycode: PlatformKeycode, state: KeyState) {
 		self.fake_input.keyboard_key(keycode.into(), state.into());
-	}
-
-	fn should_flush_after_character(&self, queued_characters: u32) -> bool {
-		self.config
-			.flush_every
-			.is_some_and(|flush_every| queued_characters >= flush_every.get())
 	}
 }

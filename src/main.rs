@@ -1,8 +1,14 @@
-use std::{error::Error, io, num::NonZeroU32, process::ExitCode, time::Duration};
+use std::{
+	error::Error,
+	io,
+	num::{NonZeroU32, NonZeroU64},
+	process::ExitCode,
+	time::Duration,
+};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
-use kwtypr::{InitializeError, Kwtypr, KwtyprConfig, SendTextError, TypingOutcome};
+use kwtypr::{ChunkPacing, InitializeError, Kwtypr, KwtyprConfig, SendTextError, TypingOutcome};
 use thiserror::Error;
 
 /// KWtype, but blazingly fast™
@@ -40,21 +46,34 @@ struct ConfigArgs {
 	/// Delay N milliseconds before typing begins to improve application compatibility
 	#[arg(long = "initial-delay", default_value_t = 0, value_name = "MS")]
 	initial_delay_ms: u64,
-	/// Delay N milliseconds between typing each character
+	/// Wait N milliseconds after each typed character (equivalent to --chunk-size 1 --chunk-delay N)
 	#[arg(
 		short = 'd',
 		long = "character-delay",
 		alias = "key-delay",
-		default_value_t = 0,
-		value_name = "MS"
+		value_name = "MS",
+		conflicts_with_all = ["chunk_size", "chunk_delay_ms"]
 	)]
-	character_delay_ms: u64,
+	character_delay_ms: Option<NonZeroU64>,
+	/// Type text in chunks of N input characters
+	#[arg(
+		long = "chunk-size",
+		value_name = "N",
+		requires = "chunk_delay_ms",
+		conflicts_with = "character_delay_ms"
+	)]
+	chunk_size: Option<NonZeroU32>,
+	/// Wait N milliseconds after each typed chunk
+	#[arg(
+		long = "chunk-delay",
+		value_name = "MS",
+		requires = "chunk_size",
+		conflicts_with = "character_delay_ms"
+	)]
+	chunk_delay_ms: Option<NonZeroU64>,
 	/// Hold each key for N milliseconds before releasing it
 	#[arg(short = 'H', long = "key-hold", default_value_t = 0, value_name = "MS")]
 	key_hold_ms: u64,
-	/// Flush queued input after every N input characters
-	#[arg(long = "flush-every", value_name = "N")]
-	flush_every: Option<NonZeroU32>,
 	/// Fall back to Ctrl+Shift+U Unicode input when a character cannot be typed directly
 	#[arg(long)]
 	unicode_fallback: bool,
@@ -129,11 +148,27 @@ fn handle_error(error: &KwtyprError) -> ExitCode {
 
 impl From<ConfigArgs> for KwtyprConfig {
 	fn from(args: ConfigArgs) -> Self {
+		let chunk_pacing = match (
+			args.character_delay_ms,
+			args.chunk_size,
+			args.chunk_delay_ms,
+		) {
+			(Some(delay), None, None) => Some(ChunkPacing {
+				size: NonZeroU32::new(1).expect("1 should always be non-zero"),
+				delay: Duration::from_millis(delay.get()),
+			}),
+			(None, Some(size), Some(delay)) => Some(ChunkPacing {
+				size,
+				delay: Duration::from_millis(delay.get()),
+			}),
+			(None, None, None) => None,
+			_ => unreachable!("chunk pacing arguments should be validated by clap"),
+		};
+
 		Self {
 			initial_delay: Duration::from_millis(args.initial_delay_ms),
-			character_delay: Duration::from_millis(args.character_delay_ms),
 			key_hold: Duration::from_millis(args.key_hold_ms),
-			flush_every: args.flush_every,
+			chunk_pacing,
 			unicode_fallback: args.unicode_fallback,
 			ready_timeout: match args.ready_timeout_ms {
 				0 => None,

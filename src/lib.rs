@@ -28,10 +28,14 @@ pub struct Kwtypr<State> {
 pub struct KwtyprConfig {
 	pub ready_timeout: Option<Duration>,
 	pub initial_delay: Duration,
-	pub character_delay: Duration,
 	pub key_hold: Duration,
-	pub flush_every: Option<NonZeroU32>,
+	pub chunk_pacing: Option<ChunkPacing>,
 	pub unicode_fallback: bool,
+}
+
+pub struct ChunkPacing {
+	pub size: NonZeroU32,
+	pub delay: Duration,
 }
 
 pub struct Uninitialized;
